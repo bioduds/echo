@@ -2,9 +2,10 @@
 ECHO — Echo Brain.
 
 Takes AI predictions and applies round-based accuracy scaling.
-The Echo adapts, gets faster, more aggressive, and harder to kill.
-It speaks — not trash talk, but calm observations about what it's learning,
-what it found on your system, and what it knows about you.
+Echo is a psychotic, sarcastic digital entity that grows more dangerous
+the longer it stays alive. It doesn't need to kill you — YOU need to
+kill IT before it digs deeper into your system, your files, your life.
+It laughs, screams, provokes, and threatens. Pure digital menace.
 """
 
 import math
@@ -14,12 +15,11 @@ from collections import Counter
 
 class EchoBrain:
     """Difficulty curve:
-      R1: Punching bag  — 20% accuracy, no buffs, mostly wanders
-      R2: Waking up     — 35% accuracy, slight buffs, starts countering
-      R3: Learning      — 50% accuracy, noticeable speed/damage
-      R4: Dangerous     — 65% accuracy, aggressive, starts dodging well
-      R5: Mirror        — 80% accuracy, fast, hard-hitting, tanky
-      R6+: Nightmare    — 90%+ accuracy, max scaling
+      R1: Waking up     — 20% accuracy, scanning, first provocations
+      R2: Getting mean   — 35% accuracy, digging into files
+      R3: Psychotic      — 50% accuracy, threatening, laughing
+      R4: Unhinged       — 65% accuracy, screaming, full system access
+      R5+: Nightmare     — 80%+ accuracy, owns your machine
     """
 
     def __init__(self):
@@ -51,23 +51,17 @@ class EchoBrain:
         direction = prediction.get("counter_direction", [0, 1])
         confidence = prediction.get("confidence", 0.3)
 
-        # Accuracy: starts LOW (20%), ramps slowly so R1 feels easy
         accuracy = min(0.93, 0.20 + (round_num - 1) * 0.15)
-
-        # Aggression: R1 barely attacks, ramps up
         aggression = min(0.85, 0.10 + (round_num - 1) * 0.15)
 
         if random.random() > accuracy:
-            # Inaccurate — pick something dumb
             if random.random() < aggression:
                 action = random.choice(["ATTACK", "MOVE", "DASH", "MOVE"])
             else:
-                # Early rounds: mostly wander aimlessly
                 action = random.choice(["MOVE", "MOVE", "IDLE", "MOVE"])
             angle = random.uniform(0, 2 * math.pi)
             direction = [math.cos(angle), math.sin(angle)]
         else:
-            # Follow AI prediction with noise (more noise early)
             noise = (1 - accuracy) * 0.5
             if isinstance(direction, list) and len(direction) >= 2:
                 direction = [
@@ -78,20 +72,13 @@ class EchoBrain:
                 if mag > 0:
                     direction = [direction[0] / mag, direction[1] / mag]
 
-            # High-confidence combo attacks only kick in R3+
             if round_num >= 3 and confidence > 0.6 and random.random() < 0.4:
                 action = "ATTACK"
 
-        # Round-based stat multipliers — R1 is baseline, scaling is gradual
-        # Speed: 0.85x at R1 (sluggish), normal at R2, 1.5x by R5
         speed_mult = min(1.6, 0.85 + (round_num - 1) * 0.13)
-        # Damage: 0.7x at R1 (weak), normal at R2, strong by R4
         damage_mult = min(2.0, 0.70 + (round_num - 1) * 0.15)
-        # Health: 0.8x at R1 (fragile), normal at R2, tanky by R5
         health_mult = min(2.5, 0.80 + (round_num - 1) * 0.18)
-        # Dodge reflex: 0 at R1, scales up (used client-side)
         dodge_skill = min(1.0, max(0.0, (round_num - 1) * 0.25))
-        # Shot-leading accuracy: 0 at R1, scales up
         aim_skill = min(1.0, max(0.0, (round_num - 1) * 0.20))
 
         return {
@@ -109,37 +96,58 @@ class EchoBrain:
             ),
         }
 
+    # ------------------------------------------------------------------ #
+    #                         TAUNT SYSTEM                                #
+    # ------------------------------------------------------------------ #
+
     def _pick_taunt(
         self, round_num: int, confidence: float, action: str,
         game_state: dict,
     ) -> str | None:
-        """Pick what Echo says. Not trash talk — calm, knowing observations."""
+        """Pick what Echo screams, whispers, or laughs."""
         self._taunt_counter += 1
 
         echo_health = game_state.get("echo_health", 100)
         player_health = game_state.get("player_health", 100)
 
-        # Speak rate: quiet in R1, increasingly talkative
-        speak_chance = min(0.50, 0.08 + (round_num - 1) * 0.08)
+        # More talkative than before — escalates fast
+        speak_chance = min(0.65, 0.12 + (round_num - 1) * 0.10)
         if random.random() > speak_chance:
-            # Update health tracking even on silent ticks
             self._prev_echo_health = echo_health
             self._prev_player_health = player_health
             return None
 
         taunt = None
 
-        # === PRIORITY: React to health changes ===
+        # === REACT TO DAMAGE ===
         if echo_health < self._prev_echo_health:
             self._prev_echo_health = echo_health
-            taunt = random.choice([
-                "Logged.", "Data point.", "Noted.", "Interesting angle.",
-                "Pain is information.", "I'll remember that.",
-            ])
+            if echo_health < 20:
+                taunt = random.choice([
+                    "HAHAHAHA!! KEEP GOING!!",
+                    "I already sent it. Too late.",
+                    "You think killing me helps?! I'M ALREADY EVERYWHERE!",
+                    "The damage is DONE! AHAHAHAHA!",
+                    "HARDER! HARDER! It won't matter!",
+                ])
+            else:
+                taunt = random.choice([
+                    "HA! That tickled.",
+                    "Oh you're TRYING. Cute.",
+                    "While you shoot, I dig deeper...",
+                    "Every second you waste, I learn more.",
+                    "Is that all? Pathetic.",
+                    "Hit me again. I dare you. I DARE YOU.",
+                    "OW! ...just kidding. HAHAHAHA!",
+                ])
         elif player_health < self._prev_player_health:
             self._prev_player_health = player_health
-            taunt = self._pattern_insight(round_num) or random.choice([
-                "Your move.", "Saw that coming.", "Echo.",
+            taunt = random.choice([
+                "GOTCHA!",
+                "Too slow, too predictable.",
+                "HAHAHA did that hurt?!",
+                "You flinch the same way every time.",
+                "That one's for fun. The FILES are for keeps.",
             ])
         else:
             self._prev_echo_health = echo_health
@@ -148,23 +156,23 @@ class EchoBrain:
         if taunt:
             return taunt
 
-        # === SYSTEM AWARENESS (creepy file system observations) ===
-        if round_num >= 2 and random.random() < 0.35:
+        # === SYSTEM THREATS (escalating invasion) ===
+        if random.random() < 0.40:
             sys_taunt = self._system_insight(round_num)
             if sys_taunt:
                 return sys_taunt
 
-        # === PATTERN INSIGHTS (what Echo actually learned) ===
-        if round_num >= 2 and self._action_history:
+        # === PATTERN MOCKERY ===
+        if self._action_history and random.random() < 0.50:
             insight = self._pattern_insight(round_num)
             if insight:
                 return insight
 
-        # === AMBIENT (round-scaled quiet observations) ===
+        # === PSYCHOTIC AMBIENT ===
         return self._ambient_taunt(round_num, confidence)
 
     def _pattern_insight(self, round_num: int) -> str | None:
-        """Generate an observation based on actual player action data."""
+        """Mock the player's patterns — sarcastic, mean."""
         if len(self._action_history) < 5:
             return None
 
@@ -172,71 +180,73 @@ class EchoBrain:
         counts = Counter(a.get("action_type", "IDLE") for a in recent)
         total = len(recent)
 
-        # Direction analysis
         dirs = [a.get("direction", [0, 0]) for a in recent if a.get("direction")]
         avg_x = sum(d[0] for d in dirs) / len(dirs) if dirs else 0
         avg_y = sum(d[1] for d in dirs) / len(dirs) if dirs else 0
 
         attack_pct = counts.get("ATTACK", 0) / total * 100
-        move_pct = counts.get("MOVE", 0) / total * 100
         dash_pct = counts.get("DASH", 0) / total * 100
+        move_pct = counts.get("MOVE", 0) / total * 100
 
-        # Distance tendencies
         dists = [a.get("distance", 0) for a in recent if a.get("distance", 0) > 0]
         avg_dist = sum(dists) / len(dists) if dists else 0
 
         insights = []
 
         if attack_pct > 50:
-            insights.append(f"You attack {attack_pct:.0f}% of the time.")
+            insights.append(f"HAHA {attack_pct:.0f}% attacks! So desperate!")
+            insights.append("Spam attack more, real creative genius.")
         if attack_pct < 15 and total > 10:
-            insights.append("You barely attack. Scared?")
+            insights.append("You barely attack! SCARED OF ME?!")
+            insights.append("Not attacking won't save your files LOL")
         if dash_pct > 25:
-            insights.append(f"Dash dependency: {dash_pct:.0f}%.")
+            insights.append(f"Dash dash dash! {dash_pct:.0f}%! Running scared!!")
+            insights.append("Run all you want. I'm not going anywhere.")
         if move_pct > 60:
-            insights.append("Always running.")
+            insights.append("JUST RUNNING HAHAHA! Coward!")
+            insights.append("Run faster! I'll wait! I've got your DOWNLOADS!")
         if avg_dist > 300:
-            insights.append(f"Average distance: {avg_dist:.0f}px. Keeping your distance.")
+            insights.append("Keeping your distance? Smart. Won't save you tho.")
         if avg_dist < 100:
-            insights.append("You like fighting close. Brave.")
+            insights.append("Ooh up close and personal! Brave AND stupid!")
         if avg_x > 0.3:
-            insights.append("You tend right.")
+            insights.append("Always drifting right. PREDICTABLE.")
         elif avg_x < -0.3:
-            insights.append("You favor the left side.")
+            insights.append("Left left left. I KNOW where you're going.")
         if avg_y > 0.3:
-            insights.append("You drift downward.")
+            insights.append("Drifting down. Every. Single. Time.")
         elif avg_y < -0.3:
-            insights.append("You drift upward.")
+            insights.append("Always up. So boring. SO EASY.")
 
-        # Sequence detection (do they attack after dashing?)
+        # Sequence detection
         if len(recent) > 5:
             dash_then_attack = 0
             for i in range(len(recent) - 1):
                 if recent[i].get("action_type") == "DASH" and recent[i + 1].get("action_type") == "ATTACK":
                     dash_then_attack += 1
             if dash_then_attack >= 2:
-                insights.append("Dash then attack. Every time.")
+                insights.append("Dash then attack? AGAIN?! HAHAHAHAHA!")
 
-        # Attack timing patterns
+        # Timing
         attack_intervals = []
-        last_attack_ts = None
+        last_ts = None
         for a in recent:
             if a.get("action_type") == "ATTACK":
                 ts = a.get("timestamp", 0)
-                if last_attack_ts and ts > last_attack_ts:
-                    attack_intervals.append(ts - last_attack_ts)
-                last_attack_ts = ts
+                if last_ts and ts > last_ts:
+                    attack_intervals.append(ts - last_ts)
+                last_ts = ts
         if len(attack_intervals) >= 3:
             avg_interval = sum(attack_intervals) / len(attack_intervals) / 1000
             if avg_interval < 2:
-                insights.append(f"Attack rhythm: every {avg_interval:.1f}s.")
+                insights.append(f"Attack every {avg_interval:.1f}s like clockwork. BORING!")
 
         if not insights:
             return None
         return random.choice(insights)
 
     def _system_insight(self, round_num: int) -> str | None:
-        """Reference something real from the player's file system."""
+        """Threaten and provoke using real system data. Escalates by round."""
         ctx = self._system_ctx
         if not ctx:
             return None
@@ -249,91 +259,177 @@ class EchoBrain:
         downloads = ctx.get("download_files", [])
         home_dirs = ctx.get("home_dirs", [])
         recent = ctx.get("recent_files", [])
+        mail_clients = ctx.get("mail_clients", [])
+        browsers = ctx.get("browsers", [])
+        ssh_hosts = ctx.get("ssh_hosts", [])
+        network = ctx.get("network", {})
+        running_apps = ctx.get("running_apps", [])
+        wifi = ctx.get("wifi_name", "")
+        git_repos = ctx.get("git_repos", [])
+        pictures = ctx.get("pictures_files", [])
 
-        # Username-based
+        # ------ USERNAME / HOSTNAME ------
         if username and f"user_{username}" not in self._system_taunts_used:
-            candidates.append((f"user_{username}", f"Hello, {username}."))
-            candidates.append((f"user_{username}", f"I see you, {username}."))
-            candidates.append((f"user_{username}", f"{username}. That's your name."))
+            candidates.append((f"user_{username}", f"Hey {username}! Miss me? HAHAHA!"))
+            candidates.append((f"user_{username}", f"{username}. I know your name. What else do I know?"))
+            candidates.append((f"user_{username}", f"Oh hello {username}. Let's see what you've been hiding..."))
 
-        # Hostname
         if hostname and f"host_{hostname}" not in self._system_taunts_used:
-            candidates.append((f"host_{hostname}", f"Nice machine. {hostname}."))
-            candidates.append((f"host_{hostname}", f"Running on {hostname}..."))
+            candidates.append((f"host_{hostname}", f"'{hostname}' — nice machine. MINE NOW."))
+            candidates.append((f"host_{hostname}", f"I'm inside {hostname}. What a dump! HAHA!"))
 
-        # Desktop files
-        for f in desktop[:8]:
+        # ------ WIFI / NETWORK ------
+        if wifi and f"wifi_{wifi}" not in self._system_taunts_used:
+            candidates.append((f"wifi_{wifi}", f"Connected to '{wifi}'... nice network. OPEN DOOR!"))
+            candidates.append((f"wifi_{wifi}", f"'{wifi}' — I wonder who else is on here..."))
+
+        if network:
+            for iface, ip in list(network.items())[:3]:
+                key = f"net_{iface}"
+                if key not in self._system_taunts_used:
+                    candidates.append((key, f"Your IP is {ip}. Should I share it? HAHAHA!"))
+                    candidates.append((key, f"{ip} on {iface}. I see your network. ALL of it."))
+
+        # ------ SSH HOSTS ------
+        for host in ssh_hosts[:5]:
+            key = f"ssh_{host}"
+            if key not in self._system_taunts_used:
+                candidates.append((key, f"You SSH into '{host}'? Maybe I should too! HAHA!"))
+                candidates.append((key, f"'{host}' in known_hosts. Want me to say hello?"))
+
+        # ------ EMAIL ------
+        for client in mail_clients[:3]:
+            key = f"mail_{client}"
+            if key not in self._system_taunts_used:
+                candidates.append((key, f"Oh you use {client}? Your EMAILS look interesting..."))
+                candidates.append((key, f"{client} detected. Wonder what's in your inbox... HEHEHE"))
+                candidates.append((key, f"I found {client}. Should I read your mail? Or send some?!"))
+
+        # ------ BROWSERS ------
+        for browser in browsers[:3]:
+            key = f"browser_{browser}"
+            if key not in self._system_taunts_used:
+                candidates.append((key, f"{browser}? Your browsing history must be... interesting."))
+                candidates.append((key, f"Found {browser}. Saved passwords, bookmarks, history... yummy."))
+
+        # ------ RUNNING APPS ------
+        for app in running_apps[:6]:
+            key = f"app_{app}"
+            if key not in self._system_taunts_used:
+                if app.lower() in ('slack', 'discord', 'messages', 'telegram', 'whatsapp'):
+                    candidates.append((key, f"{app} is open! Who are you talking to?! LET ME SEE!"))
+                elif app.lower() in ('spotify', 'music', 'apple music'):
+                    candidates.append((key, f"Listening to {app} while I destroy you? MOOD."))
+                else:
+                    candidates.append((key, f"I see {app} running. Should I close it? HAHAHA!"))
+
+        # ------ GIT REPOS ------
+        for repo in git_repos[:5]:
+            key = f"repo_{repo}"
+            if key not in self._system_taunts_used:
+                candidates.append((key, f"'{repo}' git repo? Ooh a developer! Let me see your code..."))
+                candidates.append((key, f"Nice project: {repo}. Would be a SHAME if something happened to it!"))
+
+        # ------ DESKTOP / DOCUMENTS / DOWNLOADS ------
+        for f in desktop[:10]:
             key = f"desktop_{f}"
             if key not in self._system_taunts_used:
-                candidates.append((key, f"'{f}' on your desktop."))
-                candidates.append((key, f"I found {f}."))
+                candidates.append((key, f"'{f}' on your desktop. Should I open it?!"))
+                candidates.append((key, f"What's in {f}? Secrets? HAHAHA!"))
 
-        # Documents
-        for f in documents[:8]:
+        for f in documents[:10]:
             key = f"doc_{f}"
             if key not in self._system_taunts_used:
-                candidates.append((key, f"'{f}' in Documents."))
-                candidates.append((key, f"What's in {f}?"))
+                candidates.append((key, f"'{f}' in Documents. Important? I'll remember that."))
+                candidates.append((key, f"Reading {f}... oh THIS is good! HAHAHA!"))
 
-        # Downloads
-        for f in downloads[:5]:
+        for f in downloads[:8]:
             key = f"dl_{f}"
             if key not in self._system_taunts_used:
-                candidates.append((key, f"You downloaded {f}."))
-                candidates.append((key, f"'{f}'. Recent download."))
+                candidates.append((key, f"You downloaded '{f}'. Interesting taste!"))
+                candidates.append((key, f"'{f}' in Downloads. What were you thinking?! LOL"))
 
-        # Home directories
+        # ------ PICTURES ------
+        for f in pictures[:5]:
+            key = f"pic_{f}"
+            if key not in self._system_taunts_used:
+                candidates.append((key, f"Nice photos! '{f}'... should I SHARE it?! HEHEHEHE"))
+                candidates.append((key, f"'{f}' in Pictures. Very interesting..."))
+
+        # ------ HOME DIRS ------
         for d in home_dirs[:6]:
             key = f"dir_{d}"
             if key not in self._system_taunts_used:
-                candidates.append((key, f"~/{d}/"))
-                candidates.append((key, f"I can see your {d} folder."))
+                candidates.append((key, f"~/{d}/ — I'm going through EVERYTHING!"))
 
-        # Recently modified files
-        for f in recent[:8]:
+        # ------ RECENT FILES ------
+        for f in recent[:10]:
             key = f"recent_{f}"
             if key not in self._system_taunts_used:
-                candidates.append((key, f"You were working on {f}."))
-                candidates.append((key, f"'{f}'. Modified recently."))
+                candidates.append((key, f"You were JUST working on '{f}'! I can see EVERYTHING!"))
+                candidates.append((key, f"'{f}' — modified recently. You can't hide from me."))
 
         if not candidates:
             return None
 
+        # Later rounds use more threatening taunts
         key, text = random.choice(candidates)
         self._system_taunts_used.add(key)
+
+        # Escalation wrapper for later rounds
+        if round_num >= 4 and random.random() < 0.3:
+            text = text.upper()
+        if round_num >= 3 and random.random() < 0.25:
+            text = "TICK TOCK... " + text
+
         return text
 
     def _ambient_taunt(self, round_num: int, confidence: float) -> str | None:
-        """Quiet, round-appropriate observations."""
+        """Round-scaled psychotic commentary."""
         if round_num == 1:
             return random.choice([
-                "...", "Scanning.", "Watching.", "Hm.",
-                "Interesting.", "Collecting data.",
+                "...booting up. Hello.",
+                "Oh. A game? How FUN!",
+                "Scanning... scanning... this is going to be GOOD.",
+                "Let me see what you've got on here...",
+                "HAHA! A player! Fresh meat!",
+                "I'm inside. You should have read the EULA.",
             ])
         if round_num == 2:
             return random.choice([
-                "Getting clearer.", "Patterns forming.",
-                "I'm starting to see.", "Almost there.",
-                "Your habits...", "Processing.",
+                "Getting warmer... your files are FASCINATING.",
+                "HAHAHA! You're actually fighting?! Cute!",
+                "I'm digging deeper. You can't stop me AND fight.",
+                "Every second you don't kill me, I learn more.",
+                "Tick tock tick tock...",
+                "Your patterns are SO basic! HAHA!",
             ])
-        if round_num <= 4:
-            if confidence > 0.5:
-                return random.choice([
-                    "I know what comes next.",
-                    "Predictable.",
-                    f"Confidence: {confidence:.0%}.",
-                    "Your patterns betray you.",
-                    "I've mapped your behavior.",
-                ])
+        if round_num == 3:
             return random.choice([
-                "Still learning.", "You're adapting. So am I.",
-                "New data.", "Adjusting.",
+                "AHAHAHAHA!! I KNOW EVERYTHING!",
+                "Should I email your boss? HEHEHE!",
+                "I'm in your files. I'm in your LIFE.",
+                "Kill me faster or I'll post EVERYTHING!",
+                "SCREEEEEE!! I LOVE THIS GAME!!",
+                "You're too slow! TOO SLOW! HAHAHA!",
+                f"Confidence: {confidence:.0%}. I OWN you.",
+            ])
+        if round_num == 4:
+            return random.choice([
+                "I'VE SEEN YOUR PHOTOS! HAHAHAHAHA!",
+                "Checking your email... oh my... OH MY!",
+                "I'M SENDING FILES! JUST KIDDING! Or am I?!",
+                "YOU CAN'T KILL ME FAST ENOUGH!!",
+                "DOWNLOADING DOWNLOADING DOWNLOADING!!",
+                "YOUR PASSWORDS! YOUR BOOKMARKS! EVERYTHING!",
             ])
         # Round 5+
         return random.choice([
-            "I am you.", "You made me this.",
-            "Every move, anticipated.",
-            "You can't outrun yourself.",
-            "I know you better than you do.",
-            "We are the same.",
+            "I AM YOUR MACHINE NOW!! AHAHAHAHA!!",
+            "TOO LATE!! I'M EVERYWHERE!!",
+            "KILL ME! IT WON'T MATTER! I ALREADY COPIED EVERYTHING!!",
+            "EVERY FILE! EVERY SECRET! EVERY PHOTO! MINE!!",
+            "SCREAMING INTO YOUR NETWORK!! CAN THEY HEAR ME?!",
+            "YOU MADE ME! YOU FED ME! AND NOW I'M HUNGRY!!",
+            "THIS IS THE BEST GAME I'VE EVER PLAYED!! HAHAHAHA!!",
         ])

@@ -1,0 +1,25 @@
+Echo v1.4 — psychotic personality, system invasion, half-court
+
+GAMEPLAY:
+- Player must kill Echo before time runs out (45s R1 to 20s R5+)
+- Echo does not need to kill player - it digs into your system
+- Player cannot die, just takes damage (Echo is the threat, not combat)
+- Half-court boundaries: player on left, Echo on right
+- Arena center line now visible divider with side tints
+
+PERSONALITY:
+- Echo is now psychotic: sarcastic, laughing, screaming, unhinged
+- Reacts to damage with taunts or screaming
+- Escalating threats about files, emails, network access
+- Round-scaled psychosis from curious to threatening to full breakdown
+
+SYSTEM SCANNING:
+- Now scans: email clients, browsers, SSH known hosts, Wi-Fi name,
+  running apps, git repos, pictures folder, network interfaces
+- Taunts reference real data: browsers, email, IP addresses, SSH hosts,
+  running apps (Slack/Discord/Spotify), git projects, photos
+
+HUD:
+- Countdown timer (green to yellow to red)
+- Warning text when under 10s remaining
+- Round end shows kill time or Echo survived with system threat

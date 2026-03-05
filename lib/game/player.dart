@@ -91,8 +91,8 @@ class Player extends CircleComponent
       position += velocity * moveSpeed * dt;
     }
 
-    // Clamp to arena
-    position.x = position.x.clamp(_kRadius, game.size.x - _kRadius);
+    // Clamp to left half of arena (player's side)
+    position.x = position.x.clamp(_kRadius, game.halfCourt - _kRadius);
     position.y = position.y.clamp(_kRadius, game.size.y - _kRadius);
 
     // Record actions (throttled)

@@ -27,14 +27,24 @@ class Arena extends PositionComponent {
       ..strokeWidth = 2;
     canvas.drawRect(Offset.zero & Size(size.x, size.y), borderPaint);
 
-    // Center line
+    // Center line — half-court divider
     final centerPaint = Paint()
-      ..color = const Color(0x0CFFFFFF)
-      ..strokeWidth = 1;
+      ..color = const Color(0x30FFFFFF)
+      ..strokeWidth = 1.5;
     canvas.drawLine(
       Offset(size.x / 2, 0),
       Offset(size.x / 2, size.y),
       centerPaint,
+    );
+
+    // Subtle side tints
+    canvas.drawRect(
+      Rect.fromLTWH(0, 0, size.x / 2, size.y),
+      Paint()..color = const Color(0x0600E5FF),
+    );
+    canvas.drawRect(
+      Rect.fromLTWH(size.x / 2, 0, size.x / 2, size.y),
+      Paint()..color = const Color(0x06FF1744),
     );
   }
 }

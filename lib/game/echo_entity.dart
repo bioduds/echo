@@ -179,7 +179,8 @@ class EchoEntity extends CircleComponent
     _tryDodge(dt);
 
     position += currentVelocity * dt;
-    position.x = position.x.clamp(_kRadius, game.size.x - _kRadius);
+    // Clamp to right half of arena (Echo's side)
+    position.x = position.x.clamp(game.halfCourt + _kRadius, game.size.x - _kRadius);
     position.y = position.y.clamp(_kRadius, game.size.y - _kRadius);
     currentVelocity *= 0.92;
   }

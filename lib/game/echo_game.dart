@@ -27,6 +27,14 @@ class EchoGame extends FlameGame
   // Poll interval scales: R1=0.7s (sluggish), R3=0.4s, R5+=0.25s
   double get _aiPollInterval => (0.7 - (round - 1) * 0.1).clamp(0.25, 0.7);
 
+  // Round timer — kill Echo before time runs out
+  double roundTimer = 0;
+  // Time limit per round: gets shorter as rounds go on
+  double get roundTimeLimit => (45.0 - (round - 1) * 5).clamp(20.0, 45.0);
+
+  // Half-court boundary (center of arena)
+  double get halfCourt => size.x / 2;
+
   EchoGame({required this.backendUrl});
 
   @override
@@ -48,12 +56,16 @@ class EchoGame extends FlameGame
     add(Hud());
 
     roundActive = true;
+    roundTimer = 0;
   }
 
   @override
   void update(double dt) {
     super.update(dt);
     if (!roundActive) return;
+
+    // Round timer — player must kill Echo in time
+    roundTimer += dt;
 
     // Poll AI for Echo actions
     _aiPollTimer += dt;
@@ -62,9 +74,18 @@ class EchoGame extends FlameGame
       _pollEchoAction();
     }
 
-    // Check round end
-    if (player.health <= 0 || echo.health <= 0) {
+    // Round ends when Echo dies OR time runs out
+    // Player can't "die" — they just take damage as punishment
+    if (echo.health <= 0) {
+      playerWonRound = true;
       _endRound();
+    } else if (roundTimer >= roundTimeLimit) {
+      playerWonRound = false;
+      _endRound();
+    }
+    // Player health resets each round, but never ends the round
+    if (player.health <= 0) {
+      player.health = 1; // keep alive, just barely
     }
   }
 
@@ -100,7 +121,6 @@ class EchoGame extends FlameGame
 
   void _endRound() {
     roundActive = false;
-    playerWonRound = echo.health <= 0;
 
     // Request analysis asynchronously
     ai.analyze(round).then((analysis) {
@@ -124,5 +144,6 @@ class EchoGame extends FlameGame
     roundActive = true;
     _waitingForAi = false;
     _aiPollTimer = 0;
+    roundTimer = 0;
   }
 }

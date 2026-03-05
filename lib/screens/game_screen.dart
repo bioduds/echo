@@ -40,7 +40,10 @@ class _RoundEndOverlay extends StatelessWidget {
   Widget build(BuildContext context) {
     final won = game.playerWonRound;
     final color = won ? const Color(0xFF00E5FF) : const Color(0xFFFF1744);
-    final title = won ? 'ROUND ${game.round} WON' : 'ROUND ${game.round} LOST';
+    final title = won ? 'ECHO ELIMINATED' : 'ECHO SURVIVED';
+    final subtitle = won
+        ? 'Round ${game.round} cleared in ${game.roundTimer.toStringAsFixed(1)}s'
+        : 'Time ran out! Echo dug deeper into your system...';
 
     return Center(
       child: Container(
@@ -73,9 +76,16 @@ class _RoundEndOverlay extends StatelessWidget {
                 fontFamily: 'monospace',
               ),
             ),
+            const SizedBox(height: 8),
+            Text(
+              subtitle,
+              style: TextStyle(
+                color: color.withAlpha(180),
+                fontSize: 13,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
             const SizedBox(height: 24),
-
-            // AI taunt
             if (game.aiTaunt != null) ...[
               Container(
                 width: double.infinity,
@@ -179,8 +189,8 @@ class _RoundEndOverlay extends StatelessWidget {
             // Tip
             Text(
               won
-                  ? 'The Echo adapts. Can you keep changing?'
-                  : 'Try changing your patterns. The Echo predicted you.',
+                  ? 'Echo comes back stronger. Kill it faster next time.'
+                  : 'Echo is digging through your files. KILL IT!',
               style: TextStyle(
                 color: Colors.grey[500],
                 fontSize: 12,
