@@ -23,6 +23,8 @@ class EchoEntity extends CircleComponent
   double speedMult = 1.0;
   double damageMult = 1.0;
   double healthMult = 1.0;
+  double dodgeSkill = 0.0;  // 0 = can't dodge, 1 = perfect reflexes
+  double aimSkill = 0.0;    // 0 = no shot leading, 1 = perfect prediction
 
   // Dodge behavior
   double _dodgeCooldown = 0;
@@ -60,6 +62,8 @@ class EchoEntity extends CircleComponent
     // Apply round scaling from brain
     speedMult = (action['speed_mult'] as num?)?.toDouble() ?? speedMult;
     damageMult = (action['damage_mult'] as num?)?.toDouble() ?? damageMult;
+    dodgeSkill = (action['dodge_skill'] as num?)?.toDouble() ?? dodgeSkill;
+    aimSkill = (action['aim_skill'] as num?)?.toDouble() ?? aimSkill;
     final newHealthMult = (action['health_mult'] as num?)?.toDouble() ?? healthMult;
     if (newHealthMult != healthMult) {
       healthMult = newHealthMult;
@@ -78,15 +82,17 @@ class EchoEntity extends CircleComponent
         currentVelocity = facing * speed;
       case 'ATTACK':
         _tryAttack();
-        // Strafe while attacking — don't stand still
+        // Strafe while attacking — intensity scales with skill
         final perp = Vector2(-facing.y, facing.x);
-        currentVelocity = perp * speed * 0.4 * (_rng.nextBool() ? 1 : -1);
+        final strafeIntensity = 0.1 + dodgeSkill * 0.35;
+        currentVelocity = perp * speed * strafeIntensity * (_rng.nextBool() ? 1 : -1);
       case 'DASH':
         currentVelocity = facing * speed * 2.4;
       default:
-        // Even on IDLE, weave slightly
+        // IDLE weave — barely noticeable at low skill
         final perp = Vector2(-facing.y, facing.x);
-        currentVelocity = perp * speed * 0.25 * sin(_strafeAngle);
+        final weaveIntensity = 0.05 + dodgeSkill * 0.25;
+        currentVelocity = perp * speed * weaveIntensity * sin(_strafeAngle);
     }
   }
 
@@ -98,37 +104,49 @@ class EchoEntity extends CircleComponent
     final dist = position.distanceTo(playerPos);
     final speed = baseSpeed * speedMult;
 
-    if (dist > 200) {
-      // Close gap aggressively
-      currentVelocity = dir * speed * 1.1;
+    if (dodgeSkill < 0.2) {
+      // Early rounds: dumb bot — walk toward player, occasionally shoot
+      if (dist > 150) {
+        currentVelocity = dir * speed * 0.7;
+      } else {
+        _tryAttack();
+        currentVelocity = dir * speed * 0.3;
+      }
+    } else if (dist > 200) {
+      // Close gap aggressively (scales with round)
+      currentVelocity = dir * speed * (0.8 + dodgeSkill * 0.4);
     } else if (dist < 60) {
       // Too close — dash back and shoot
       _tryAttack();
-      currentVelocity = -dir * speed * 1.3;
+      currentVelocity = -dir * speed * (0.8 + dodgeSkill * 0.5);
     } else {
       // Optimal range — strafe and attack
       _tryAttack();
       final perp = Vector2(-dir.y, dir.x);
-      currentVelocity = perp * speed * 0.6 * (_rng.nextBool() ? 1 : -1);
+      currentVelocity = perp * speed * (0.2 + dodgeSkill * 0.5) * (_rng.nextBool() ? 1 : -1);
     }
   }
 
   void _tryAttack() {
     if (_attackTimer > 0) return;
-    _attackTimer = baseAttackCooldown / speedMult.clamp(1.0, 1.5);
+    // Slower attacks in early rounds (higher cooldown when speedMult < 1)
+    _attackTimer = baseAttackCooldown / speedMult.clamp(0.7, 1.5);
 
-    // Lead the shot — aim where the player will be
     final player = game.player;
     final toPlayer = player.position - position;
     final dist = toPlayer.length;
-    if (dist > 0) {
-      // Predict position based on player velocity
+
+    if (dist > 0 && aimSkill > 0.05) {
+      // Lead the shot — accuracy scales with aimSkill
+      // R1: aimSkill=0 → no leading (shoots at current pos)
+      // R5: aimSkill=1 → full prediction
       final travelTime = dist / Projectile.speed;
-      final predictedPos = player.position + player.velocity * travelTime * 0.7;
+      final predictedPos = player.position + player.velocity * travelTime * aimSkill * 0.8;
       final aimDir = predictedPos - position;
       if (aimDir.length > 0) aimDir.normalize();
       facing = aimDir;
     }
+    // else: aimSkill ~0, shoots at player's current position (easy to dodge)
 
     game.add(Projectile(
       direction: facing.normalized(),
@@ -156,20 +174,24 @@ class EchoEntity extends CircleComponent
 
   void _tryDodge(double dt) {
     if (_dodgeCooldown > 0) return;
+    // No dodge at all in early rounds
+    if (dodgeSkill < 0.15) return;
+    // Probabilistic dodge — skill determines chance of reacting
+    if (_rng.nextDouble() > dodgeSkill) return;
 
     // Find closest incoming player projectile
     Vector2? dodgeDir;
     double closestDist = double.infinity;
+    // Detection radius scales with skill: 60px at low skill → 140px at max
+    final detectRadius = 60 + (dodgeSkill * 80);
 
     for (final child in game.children) {
       if (child is Projectile && child.isPlayerOwned) {
         final dist = position.distanceTo(child.position);
-        // Check if projectile is heading toward us
         final toUs = position - child.position;
         final dot = toUs.dot(child.direction);
-        if (dot > 0 && dist < 120 && dist < closestDist) {
+        if (dot > 0 && dist < detectRadius && dist < closestDist) {
           closestDist = dist;
-          // Dodge perpendicular to projectile direction
           dodgeDir = Vector2(-child.direction.y, child.direction.x);
           if (_rng.nextBool()) dodgeDir = -dodgeDir;
         }
@@ -178,7 +200,7 @@ class EchoEntity extends CircleComponent
 
     if (dodgeDir != null) {
       _dodgeCooldown = _dodgeInterval;
-      final dodgeStrength = baseSpeed * speedMult * 2.0;
+      final dodgeStrength = baseSpeed * speedMult * (1.0 + dodgeSkill);
       currentVelocity += dodgeDir * dodgeStrength;
     }
   }

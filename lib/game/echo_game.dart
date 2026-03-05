@@ -23,7 +23,8 @@ class EchoGame extends FlameGame
 
   double _aiPollTimer = 0;
   bool _waitingForAi = false;
-  static const double _aiPollInterval = 0.3;
+  // Poll interval scales: R1=0.7s (sluggish), R3=0.4s, R5+=0.25s
+  double get _aiPollInterval => (0.7 - (round - 1) * 0.1).clamp(0.25, 0.7);
 
   EchoGame({required this.backendUrl});
 
