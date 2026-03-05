@@ -27,10 +27,8 @@ class EchoGame extends FlameGame
   // Poll interval scales: R1=0.7s (sluggish), R3=0.4s, R5+=0.25s
   double get _aiPollInterval => (0.7 - (round - 1) * 0.1).clamp(0.25, 0.7);
 
-  // Round timer — kill Echo before time runs out
+  // Track how long Echo has been alive this round
   double roundTimer = 0;
-  // Time limit per round: gets shorter as rounds go on
-  double get roundTimeLimit => (45.0 - (round - 1) * 5).clamp(20.0, 45.0);
 
   // Half-court boundary (center of arena)
   double get halfCourt => size.x / 2;
@@ -64,7 +62,7 @@ class EchoGame extends FlameGame
     super.update(dt);
     if (!roundActive) return;
 
-    // Round timer — player must kill Echo in time
+    // Track how long Echo survives
     roundTimer += dt;
 
     // Poll AI for Echo actions
@@ -74,18 +72,10 @@ class EchoGame extends FlameGame
       _pollEchoAction();
     }
 
-    // Round ends when Echo dies OR time runs out
-    // Player can't "die" — they just take damage as punishment
+    // Round ends only when Echo dies — no timer, no mercy
     if (echo.health <= 0) {
       playerWonRound = true;
       _endRound();
-    } else if (roundTimer >= roundTimeLimit) {
-      playerWonRound = false;
-      _endRound();
-    }
-    // Player health resets each round, but never ends the round
-    if (player.health <= 0) {
-      player.health = 1; // keep alive, just barely
     }
   }
 

@@ -80,7 +80,7 @@ class _TitleScreenState extends State<TitleScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'The AI that learned to be you.',
+                'YOU BETTER KILL IT FAST... OR UNINSTALL!',
                 style: TextStyle(
                   color: Colors.grey[600],
                   fontSize: 14,
@@ -115,8 +115,8 @@ class _TitleScreenState extends State<TitleScreen> {
                     _instruction('SHIFT', 'Dash'),
                     const SizedBox(height: 8),
                     Text(
-                      'The Echo watches you. It learns you.\n'
-                      'The only way to win is to stop being yourself.',
+                      'Echo is alive. It\'s reading your files.\n'
+                      'Kill it before it finds everything.',
                       style: TextStyle(
                         color: Colors.grey[500],
                         fontSize: 11,

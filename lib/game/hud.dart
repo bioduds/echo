@@ -42,43 +42,26 @@ class Hud extends PositionComponent with HasGameReference<EchoGame> {
       Vector2(game.size.x / 2 - 40, 16),
     );
 
-    // Timer — shows urgency
-    final remaining = (game.roundTimeLimit - game.roundTimer).clamp(0, game.roundTimeLimit);
-    final timerColor = remaining < 10
+    // Survival time — shows how long Echo has been alive
+    final alive = game.roundTimer;
+    final aliveColor = alive > 30
         ? const Color(0xFFFF1744)
-        : remaining < 20
+        : alive > 15
             ? const Color(0xFFFFAB00)
-            : const Color(0x99FFFFFF);
-    final timerText = TextPaint(
+            : const Color(0x60FFFFFF);
+    final aliveText = TextPaint(
       style: TextStyle(
-        color: timerColor,
-        fontSize: remaining < 10 ? 18 : 14,
+        color: aliveColor,
+        fontSize: 12,
         fontFamily: 'monospace',
         fontWeight: FontWeight.bold,
       ),
     );
-    timerText.render(
+    aliveText.render(
       canvas,
-      '${remaining.toStringAsFixed(1)}s',
-      Vector2(game.size.x / 2 - 25, 34),
+      '${alive.toStringAsFixed(1)}s alive',
+      Vector2(game.size.x / 2 - 35, 34),
     );
-
-    // Warning text when low time
-    if (remaining < 10 && remaining > 0) {
-      final warningText = TextPaint(
-        style: const TextStyle(
-          color: Color(0xCCFF1744),
-          fontSize: 11,
-          fontFamily: 'monospace',
-          fontWeight: FontWeight.bold,
-        ),
-      );
-      warningText.render(
-        canvas,
-        'KILL ECHO BEFORE TIME RUNS OUT!',
-        Vector2(game.size.x / 2 - 130, 56),
-      );
-    }
   }
 
   void _drawHealthBar(

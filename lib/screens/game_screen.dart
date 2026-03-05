@@ -39,11 +39,9 @@ class _RoundEndOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final won = game.playerWonRound;
-    final color = won ? const Color(0xFF00E5FF) : const Color(0xFFFF1744);
-    final title = won ? 'ECHO ELIMINATED' : 'ECHO SURVIVED';
-    final subtitle = won
-        ? 'Round ${game.round} cleared in ${game.roundTimer.toStringAsFixed(1)}s'
-        : 'Time ran out! Echo dug deeper into your system...';
+    final color = const Color(0xFF00E5FF);
+    final title = 'ECHO ELIMINATED';
+    final subtitle = 'Killed in ${game.roundTimer.toStringAsFixed(1)}s — but it comes back stronger.';
 
     return Center(
       child: Container(

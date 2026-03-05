@@ -93,8 +93,8 @@ class EchoEntity extends CircleComponent
       case 'MOVE':
         currentVelocity = facing * speed;
       case 'ATTACK':
-        _tryAttack();
-        // Strafe while attacking — intensity scales with skill
+        // Echo doesn't shoot — it's not trying to kill you.
+        // It just strafes menacingly.
         final perp = Vector2(-facing.y, facing.x);
         final strafeIntensity = 0.1 + dodgeSkill * 0.35;
         currentVelocity = perp * speed * strafeIntensity * (_rng.nextBool() ? 1 : -1);
@@ -117,55 +117,24 @@ class EchoEntity extends CircleComponent
     final speed = baseSpeed * speedMult;
 
     if (dodgeSkill < 0.2) {
-      // Early rounds: dumb bot — walk toward player, occasionally shoot
+      // Early rounds: wander around aimlessly
       if (dist > 150) {
-        currentVelocity = dir * speed * 0.7;
+        currentVelocity = dir * speed * 0.4;
       } else {
-        _tryAttack();
-        currentVelocity = dir * speed * 0.3;
+        currentVelocity = -dir * speed * 0.3;
       }
     } else if (dist > 200) {
-      // Close gap aggressively (scales with round)
-      currentVelocity = dir * speed * (0.8 + dodgeSkill * 0.4);
-    } else if (dist < 60) {
-      // Too close — dash back and shoot
-      _tryAttack();
-      currentVelocity = -dir * speed * (0.8 + dodgeSkill * 0.5);
-    } else {
-      // Optimal range — strafe and attack
-      _tryAttack();
+      // Pace around its half
       final perp = Vector2(-dir.y, dir.x);
-      currentVelocity = perp * speed * (0.2 + dodgeSkill * 0.5) * (_rng.nextBool() ? 1 : -1);
+      currentVelocity = perp * speed * 0.5 * (_rng.nextBool() ? 1 : -1);
+    } else if (dist < 80) {
+      // Back away — doesn't want to be close
+      currentVelocity = -dir * speed * (0.6 + dodgeSkill * 0.5);
+    } else {
+      // Strafe and dodge — irritatingly evasive
+      final perp = Vector2(-dir.y, dir.x);
+      currentVelocity = perp * speed * (0.3 + dodgeSkill * 0.5) * (_rng.nextBool() ? 1 : -1);
     }
-  }
-
-  void _tryAttack() {
-    if (_attackTimer > 0) return;
-    // Slower attacks in early rounds (higher cooldown when speedMult < 1)
-    _attackTimer = baseAttackCooldown / speedMult.clamp(0.7, 1.5);
-
-    final player = game.player;
-    final toPlayer = player.position - position;
-    final dist = toPlayer.length;
-
-    if (dist > 0 && aimSkill > 0.05) {
-      // Lead the shot — accuracy scales with aimSkill
-      // R1: aimSkill=0 → no leading (shoots at current pos)
-      // R5: aimSkill=1 → full prediction
-      final travelTime = dist / Projectile.speed;
-      final predictedPos = player.position + player.velocity * travelTime * aimSkill * 0.8;
-      final aimDir = predictedPos - position;
-      if (aimDir.length > 0) aimDir.normalize();
-      facing = aimDir;
-    }
-    // else: aimSkill ~0, shoots at player's current position (easy to dodge)
-
-    game.add(Projectile(
-      direction: facing.normalized(),
-      isPlayerOwned: false,
-      startPos: position.clone(),
-      damageMultiplier: damageMult,
-    ));
   }
 
   @override

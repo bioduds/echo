@@ -10,16 +10,16 @@ class EchoSpeech extends PositionComponent with ParentIsA<EchoEntity> {
   double _timer = 0;
   double _alpha = 0;
 
-  // Timing
-  static const double fadeInDuration = 0.25;
-  static const double displayDuration = 2.0;
-  static const double fadeOutDuration = 0.6;
+  // Timing — linger long so player can read and dread
+  static const double fadeInDuration = 0.3;
+  static const double displayDuration = 5.0;
+  static const double fadeOutDuration = 1.2;
   static const double totalDuration =
       fadeInDuration + displayDuration + fadeOutDuration;
 
-  // Cooldown so taunts don't spam
+  // Cooldown between taunts
   double _cooldown = 0;
-  static const double minCooldown = 2.5;
+  static const double minCooldown = 1.0;
 
   void showTaunt(String text) {
     if (_cooldown > 0) return;
