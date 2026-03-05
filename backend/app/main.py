@@ -61,6 +61,11 @@ class AnalyzeRequest(BaseModel):
     round: int
 
 
+class SystemContextRequest(BaseModel):
+    session_id: str
+    context: dict
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok", "service": "echo-ai", "timestamp": time.time()}
@@ -70,13 +75,27 @@ async def health():
 async def new_session():
     session_id = str(uuid.uuid4())[:8]
     analyzer.create_session(session_id)
+    brain.reset_session()
     logger.info("New session: %s", session_id)
     return {"session_id": session_id}
+
+
+@app.post("/system_context")
+async def system_context(req: SystemContextRequest):
+    brain.set_system_context(req.context)
+    logger.info(
+        "System context for %s: user=%s host=%s",
+        req.session_id,
+        req.context.get("username", "?"),
+        req.context.get("hostname", "?"),
+    )
+    return {"status": "absorbed"}
 
 
 @app.post("/action")
 async def report_action(report: ActionReport):
     analyzer.record_action(report.session_id, report.model_dump())
+    brain.record_action_for_insights(report.model_dump())
     return {"status": "recorded"}
 
 
@@ -90,7 +109,7 @@ async def predict(req: PredictRequest):
     state["distance"] = distance
 
     prediction = await analyzer.predict_player(req.session_id, state)
-    action = brain.decide(prediction, req.round)
+    action = brain.decide(prediction, req.round, game_state=state)
     return action
 
 

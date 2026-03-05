@@ -1,6 +1,7 @@
 import 'package:flame/events.dart';
 import 'package:flame/game.dart';
 import '../services/ai_service.dart';
+import '../services/system_scanner.dart';
 import 'player.dart';
 import 'echo_entity.dart';
 import 'arena.dart';
@@ -32,6 +33,9 @@ class EchoGame extends FlameGame
   Future<void> onLoad() async {
     ai = AiService(baseUrl: backendUrl);
     await ai.newSession();
+
+    // Scan system and send context to backend (async, non-blocking)
+    SystemScanner.scan().then((ctx) => ai.sendSystemContext(ctx)).catchError((_) {});
 
     add(Arena());
 

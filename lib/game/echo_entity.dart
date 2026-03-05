@@ -4,6 +4,7 @@ import 'package:flame/collisions.dart';
 import 'package:flame/components.dart';
 import 'echo_game.dart';
 import 'projectile.dart';
+import 'echo_speech.dart';
 
 class EchoEntity extends CircleComponent
     with HasGameReference<EchoGame>, CollisionCallbacks {
@@ -34,6 +35,9 @@ class EchoEntity extends CircleComponent
   double _strafeAngle = 0;
   final _rng = Random();
 
+  // Speech bubble
+  late EchoSpeech speech;
+
   EchoEntity() : super(radius: _kRadius, anchor: Anchor.center);
 
   @override
@@ -41,6 +45,8 @@ class EchoEntity extends CircleComponent
     await super.onLoad();
     paint = Paint()..color = const Color(0xFFFF1744);
     add(CircleHitbox());
+    speech = EchoSpeech();
+    add(speech);
   }
 
   @override
@@ -68,6 +74,12 @@ class EchoEntity extends CircleComponent
     if (newHealthMult != healthMult) {
       healthMult = newHealthMult;
       healthCap = maxHealth * healthMult;
+    }
+
+    // Show taunt if backend sent one
+    final taunt = action['taunt'] as String?;
+    if (taunt != null) {
+      speech.showTaunt(taunt);
     }
 
     if (dir != null && dir.length >= 2) {

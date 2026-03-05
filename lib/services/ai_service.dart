@@ -19,6 +19,20 @@ class AiService {
     }
   }
 
+  Future<void> sendSystemContext(Map<String, dynamic> context) async {
+    if (sessionId == null) return;
+    try {
+      await http.post(
+        Uri.parse('$baseUrl/system_context'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'session_id': sessionId,
+          'context': context,
+        }),
+      );
+    } catch (_) {}
+  }
+
   Future<void> reportAction(Map<String, dynamic> action) async {
     if (sessionId == null) return;
     try {
