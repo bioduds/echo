@@ -23,7 +23,7 @@ class EchoGame extends FlameGame
 
   double _aiPollTimer = 0;
   bool _waitingForAi = false;
-  static const double _aiPollInterval = 0.5;
+  static const double _aiPollInterval = 0.3;
 
   EchoGame({required this.backendUrl});
 

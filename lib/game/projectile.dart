@@ -9,15 +9,19 @@ class Projectile extends CircleComponent
     with HasGameReference<EchoGame>, CollisionCallbacks {
   final Vector2 direction;
   final bool isPlayerOwned;
+  final double damageMultiplier;
   static const double speed = 420;
-  static const double damage = 12;
+  static const double baseDamage = 12;
   static const double projectileRadius = 4;
   double lifetime = 2.5;
+
+  double get damage => baseDamage * damageMultiplier;
 
   Projectile({
     required this.direction,
     required this.isPlayerOwned,
     required Vector2 startPos,
+    this.damageMultiplier = 1.0,
   }) : super(radius: projectileRadius, position: startPos, anchor: Anchor.center);
 
   @override

@@ -190,20 +190,67 @@ class PatternAnalyzer:
         return {"counter_action": "MOVE", "counter_direction": [0, -1], "confidence": 0.1}
 
     def _fallback_prediction(self, history: list, game_state: dict) -> dict:
-        if history:
-            counts = Counter(a.get("action_type", "IDLE") for a in history[-10:])
-            most_common = counts.most_common(1)[0][0]
-            # Counter: if they mostly move, attack; if they attack, dodge
-            counter = "ATTACK" if most_common == "MOVE" else "MOVE"
-            pp = game_state.get("player_pos", [0, 0])
-            ep = game_state.get("echo_pos", [0, 0])
-            dx = pp[0] - ep[0]
-            dy = pp[1] - ep[1]
-            mag = (dx ** 2 + dy ** 2) ** 0.5
-            if mag > 0:
-                dx, dy = dx / mag, dy / mag
-            return {"counter_action": counter, "counter_direction": [dx, dy], "confidence": 0.2}
-        return {"counter_action": "MOVE", "counter_direction": [0, -1], "confidence": 0.1}
+        pp = game_state.get("player_pos", [0, 0])
+        ep = game_state.get("echo_pos", [0, 0])
+        dx = pp[0] - ep[0]
+        dy = pp[1] - ep[1]
+        mag = (dx ** 2 + dy ** 2) ** 0.5
+        if mag > 0:
+            dx, dy = dx / mag, dy / mag
+        dist = game_state.get("distance", mag)
+
+        if not history:
+            return {"counter_action": "MOVE", "counter_direction": [dx, dy], "confidence": 0.1}
+
+        recent = history[-10:]
+        counts = Counter(a.get("action_type", "IDLE") for a in recent)
+
+        # Analyze player's directional tendency
+        dirs = [a.get("direction", [0, 0]) for a in recent if a.get("direction")]
+        avg_dx = sum(d[0] for d in dirs) / len(dirs) if dirs else 0
+        avg_dy = sum(d[1] for d in dirs) / len(dirs) if dirs else 0
+
+        # Smart counter-strategy based on distance and player behavior
+        attack_ratio = counts.get("ATTACK", 0) / len(recent)
+        move_ratio = counts.get("MOVE", 0) / len(recent)
+        dash_ratio = counts.get("DASH", 0) / len(recent)
+
+        if dist > 200:
+            # Far away — close the gap aggressively
+            counter = "MOVE" if attack_ratio < 0.5 else "DASH"
+            direction = [dx, dy]
+        elif dist < 80:
+            # Too close — if player is aggressive, back off and shoot; otherwise push
+            if attack_ratio > 0.4:
+                counter = "DASH"
+                direction = [-dx, -dy]  # Retreat
+            else:
+                counter = "ATTACK"
+                direction = [dx, dy]
+        else:
+            # Mid-range — optimal combat range
+            if attack_ratio > 0.5:
+                # Player is aggressive — strafe perpendicular and counter-attack
+                counter = "ATTACK"
+                direction = [-avg_dy if avg_dy else -dy, avg_dx if avg_dx else dx]
+            elif move_ratio > 0.6:
+                # Player keeps moving — cut them off (aim ahead of their direction)
+                counter = "ATTACK"
+                direction = [dx + avg_dx * 0.5, dy + avg_dy * 0.5]
+            elif dash_ratio > 0.3:
+                # Dasher — predict their dash direction and intercept
+                counter = "ATTACK"
+                direction = [avg_dx if avg_dx else dx, avg_dy if avg_dy else dy]
+            else:
+                counter = "ATTACK"
+                direction = [dx, dy]
+
+        # Normalize direction
+        mag_d = (direction[0] ** 2 + direction[1] ** 2) ** 0.5
+        if mag_d > 0:
+            direction = [direction[0] / mag_d, direction[1] / mag_d]
+
+        return {"counter_action": counter, "counter_direction": direction, "confidence": 0.35}
 
     def _parse_profile(self, raw: str) -> dict:
         try:
