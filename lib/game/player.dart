@@ -56,7 +56,6 @@ class Player extends CircleComponent
     _keysPressed.addAll(keysPressed);
 
     if (event is KeyDownEvent) {
-      if (event.logicalKey == LogicalKeyboardKey.space) _tryAttack();
       if (event.logicalKey == LogicalKeyboardKey.shiftLeft ||
           event.logicalKey == LogicalKeyboardKey.shiftRight) {
         _tryDash();
@@ -115,17 +114,21 @@ class Player extends CircleComponent
     }
   }
 
-  void _tryAttack() {
+  /// Shoot a projectile toward the given world position (mouse cursor).
+  void shootToward(Vector2 target) {
     if (_attackTimer > 0) return;
     _attackTimer = attackCooldown;
+    final direction = (target - position);
+    if (direction.length == 0) return;
+    direction.normalize();
     game.add(Projectile(
-      direction: facing.normalized(),
+      direction: direction,
       isPlayerOwned: true,
       startPos: position.clone(),
     ));
     game.recordAction({
       'type': 'ATTACK',
-      'direction': [facing.x, facing.y],
+      'direction': [direction.x, direction.y],
     });
   }
 

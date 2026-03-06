@@ -8,7 +8,7 @@ import 'arena.dart';
 import 'hud.dart';
 
 class EchoGame extends FlameGame
-    with HasKeyboardHandlerComponents, HasCollisionDetection {
+    with HasKeyboardHandlerComponents, HasCollisionDetection, TapCallbacks, MouseMovementDetector {
   final String backendUrl;
 
   late Player player;
@@ -33,7 +33,21 @@ class EchoGame extends FlameGame
   // Half-court boundary (center of arena)
   double get halfCourt => size.x / 2;
 
+  /// Current mouse position in game coordinates
+  Vector2 mousePosition = Vector2.zero();
+
   EchoGame({required this.backendUrl});
+
+  @override
+  void onMouseMove(PointerHoverInfo info) {
+    mousePosition = info.eventPosition.global;
+  }
+
+  @override
+  void onTapDown(TapDownEvent event) {
+    if (!roundActive) return;
+    player.shootToward(mousePosition);
+  }
 
   @override
   Future<void> onLoad() async {
