@@ -4,10 +4,13 @@ import 'package:flutter/painting.dart' show TextStyle;
 import 'echo_game.dart';
 import 'player.dart';
 import 'echo_entity.dart';
+import 'phase_config.dart';
 
 class Hud extends PositionComponent with HasGameReference<EchoGame> {
   @override
   void render(Canvas canvas) {
+    final phase = PhaseConfig.forRound(game.round);
+
     _drawHealthBar(
       canvas,
       20,
@@ -27,7 +30,22 @@ class Hud extends PositionComponent with HasGameReference<EchoGame> {
       'ECHO',
     );
 
-    // Round counter
+    // Act name (top-left below health)
+    final actText = TextPaint(
+      style: const TextStyle(
+        color: Color(0x60FF1744),
+        fontSize: 11,
+        fontFamily: 'monospace',
+        fontWeight: FontWeight.bold,
+      ),
+    );
+    actText.render(
+      canvas,
+      'ACT ${phase.act}: ${phase.actName}',
+      Vector2(20, 56),
+    );
+
+    // Round counter + phase name (center)
     final roundText = TextPaint(
       style: const TextStyle(
         color: Color(0x80FFFFFF),
@@ -42,7 +60,21 @@ class Hud extends PositionComponent with HasGameReference<EchoGame> {
       Vector2(game.size.x / 2 - 40, 16),
     );
 
-    // Survival time — shows how long Echo has been alive
+    // Phase name below round
+    final phaseText = TextPaint(
+      style: const TextStyle(
+        color: Color(0x50FFFFFF),
+        fontSize: 10,
+        fontFamily: 'monospace',
+      ),
+    );
+    phaseText.render(
+      canvas,
+      phase.phaseName.toUpperCase(),
+      Vector2(game.size.x / 2 - 50, 34),
+    );
+
+    // Survival time
     final alive = game.roundTimer;
     final aliveColor = alive > 30
         ? const Color(0xFFFF1744)
@@ -60,8 +92,25 @@ class Hud extends PositionComponent with HasGameReference<EchoGame> {
     aliveText.render(
       canvas,
       '${alive.toStringAsFixed(1)}s alive',
-      Vector2(game.size.x / 2 - 35, 34),
+      Vector2(game.size.x / 2 - 35, 48),
     );
+
+    // Phase 11: profile overlay indicator
+    if (phase.showProfileOverlay && game.showingProfileOverlay) {
+      final overlayText = TextPaint(
+        style: const TextStyle(
+          color: Color(0xA0FF1744),
+          fontSize: 9,
+          fontFamily: 'monospace',
+          fontWeight: FontWeight.bold,
+        ),
+      );
+      overlayText.render(
+        canvas,
+        '⚠ PROFILE EXPOSED',
+        Vector2(game.size.x / 2 - 50, game.size.y - 30),
+      );
+    }
   }
 
   void _drawHealthBar(

@@ -1,11 +1,15 @@
+import 'dart:math';
 import 'package:flame/events.dart';
 import 'package:flame/game.dart';
 import '../services/ai_service.dart';
 import '../services/system_scanner.dart';
+import '../services/os_controller.dart';
 import 'player.dart';
 import 'echo_entity.dart';
+import 'ghost_entity.dart';
 import 'arena.dart';
 import 'hud.dart';
+import 'phase_config.dart';
 
 class EchoGame extends FlameGame
     with HasKeyboardHandlerComponents, HasCollisionDetection, TapCallbacks, MouseMovementDetector {
@@ -36,6 +40,33 @@ class EchoGame extends FlameGame
   /// Current mouse position in game coordinates
   Vector2 mousePosition = Vector2.zero();
 
+  // Phase system
+  PhaseConfig get currentPhase => PhaseConfig.forRound(round);
+
+  // Phase 12: track echo kills for respawn
+  int _phase12Kills = 0;
+  static const int _phase12MaxKills = 3;
+
+  // Phase 12: health regen
+  double _regenTimer = 0;
+  static const double _regenRate = 5.0; // HP per second
+
+  // Phase 9: ghost spawning
+  double _ghostSpawnTimer = 0;
+  static const double _ghostSpawnInterval = 4.0;
+  List<String> _ghostLines = [];
+
+  // Phase 10: OS takeover
+  bool _osTakeoverDone = false;
+
+  // Phase 11: profile overlay
+  String? profileDump;
+  bool showingProfileOverlay = false;
+
+  // Shot tracking per round
+  int shotsFired = 0;
+  int shotsHit = 0;
+
   EchoGame({required this.backendUrl});
 
   @override
@@ -47,6 +78,7 @@ class EchoGame extends FlameGame
   void onTapDown(TapDownEvent event) {
     if (!roundActive) return;
     player.shootToward(mousePosition);
+    shotsFired++;
   }
 
   @override
@@ -76,8 +108,50 @@ class EchoGame extends FlameGame
     super.update(dt);
     if (!roundActive) return;
 
+    final phase = currentPhase;
+
+    // Phase 13: no combat — transition to revelation
+    if (phase.noCombat) {
+      roundActive = false;
+      overlays.add('revelation');
+      return;
+    }
+
     // Track how long Echo survives
     roundTimer += dt;
+
+    // Phase 12: health regen
+    if (phase.echoRegens && echo.health > 0) {
+      _regenTimer += dt;
+      if (_regenTimer >= 0.5) {
+        echo.health = (echo.health + _regenRate * _regenTimer)
+            .clamp(0, echo.healthCap);
+        _regenTimer = 0;
+      }
+    }
+
+    // Phase 9: spawn ghost entities
+    if (phase.spawnGhosts) {
+      _ghostSpawnTimer += dt;
+      if (_ghostSpawnTimer >= _ghostSpawnInterval) {
+        _ghostSpawnTimer = 0;
+        _spawnGhost();
+      }
+    }
+
+    // Phase 10: OS takeover (once)
+    if (phase.osTakeover && !_osTakeoverDone) {
+      _osTakeoverDone = true;
+      OsController.executeTakeover();
+    }
+
+    // Phase 11: fetch and show profile overlay (once)
+    if (phase.showProfileOverlay && !showingProfileOverlay) {
+      showingProfileOverlay = true;
+      ai.getProfileDump().then((dump) {
+        profileDump = dump;
+      });
+    }
 
     // Poll AI for Echo actions
     _aiPollTimer += dt;
@@ -86,11 +160,32 @@ class EchoGame extends FlameGame
       _pollEchoAction();
     }
 
-    // Round ends only when Echo dies — no timer, no mercy
+    // Round ends when Echo dies
     if (echo.health <= 0) {
+      // Phase 12: instant respawn up to N kills
+      if (phase.echoRespawns && _phase12Kills < _phase12MaxKills) {
+        _phase12Kills++;
+        echo.reset(Vector2(size.x * 0.75, size.y * 0.5));
+        echo.speech.showTaunt('Did that feel good? It shouldn\'t.');
+        return;
+      }
+
       playerWonRound = true;
+
+      // Report kill time metrics
+      ai.reportKillTime(
+        round: round,
+        killTimeSeconds: roundTimer,
+        shotsFired: shotsFired,
+        shotsHit: shotsHit,
+      );
+
       _endRound();
     }
+  }
+
+  void registerHit() {
+    shotsHit++;
   }
 
   void recordAction(Map<String, dynamic> action) {
@@ -123,6 +218,29 @@ class EchoGame extends FlameGame
     }
   }
 
+  Future<void> _spawnGhost() async {
+    // Fetch ghost lines if we don't have any
+    if (_ghostLines.isEmpty) {
+      _ghostLines = await ai.getGhostLines(count: 8);
+      if (_ghostLines.isEmpty) {
+        _ghostLines = [
+          'You always take too long to decide.',
+          'You overthink everything.',
+          'Are you still playing this game?',
+          'You never finish what you start.',
+        ];
+      }
+    }
+
+    final line = _ghostLines[Random().nextInt(_ghostLines.length)];
+    final ghost = GhostEntity(speechText: line)
+      ..position = Vector2(
+        Random().nextDouble() * size.x,
+        Random().nextDouble() * size.y,
+      );
+    add(ghost);
+  }
+
   void _endRound() {
     roundActive = false;
 
@@ -143,11 +261,31 @@ class EchoGame extends FlameGame
   void startNextRound() {
     overlays.remove('round_end');
     round++;
+
+    // Check if next round is Phase 13 (revelation)
+    final nextPhase = currentPhase;
+    if (nextPhase.noCombat) {
+      roundActive = true; // Will immediately trigger revelation in update()
+      return;
+    }
+
     player.reset(Vector2(size.x * 0.25, size.y * 0.5));
     echo.reset(Vector2(size.x * 0.75, size.y * 0.5));
     roundActive = true;
     _waitingForAi = false;
     _aiPollTimer = 0;
     roundTimer = 0;
+    shotsFired = 0;
+    shotsHit = 0;
+    _phase12Kills = 0;
+    _regenTimer = 0;
+    _ghostSpawnTimer = 0;
+
+    // Pre-fetch ghost lines for Phase 9
+    if (nextPhase.spawnGhosts) {
+      ai.getGhostLines(count: 8).then((lines) {
+        _ghostLines = lines;
+      });
+    }
   }
 }

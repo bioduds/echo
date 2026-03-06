@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'screens/title_screen.dart';
+import 'screens/disclaimer_screen.dart';
 
 void main() {
   runApp(const EchoApp());
@@ -22,7 +22,7 @@ class EchoApp extends StatelessWidget {
         scaffoldBackgroundColor: const Color(0xFF0A0A0A),
         fontFamily: 'monospace',
       ),
-      home: const TitleScreen(),
+      home: const DisclaimerScreen(),
     );
   }
 }

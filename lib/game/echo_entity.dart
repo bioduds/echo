@@ -5,6 +5,7 @@ import 'package:flame/components.dart';
 import 'echo_game.dart';
 import 'projectile.dart';
 import 'echo_speech.dart';
+import 'phase_config.dart';
 
 class EchoEntity extends CircleComponent
     with HasGameReference<EchoGame>, CollisionCallbacks {
@@ -158,6 +159,9 @@ class EchoEntity extends CircleComponent
     if (_dodgeCooldown > 0) return;
     // No dodge at all in early rounds
     if (dodgeSkill < 0.15) return;
+    // Phase 12: Echo stops dodging entirely
+    final phase = PhaseConfig.forRound(game.round);
+    if (phase.echoStopsDodging) return;
     // Probabilistic dodge — skill determines chance of reacting
     if (_rng.nextDouble() > dodgeSkill) return;
 

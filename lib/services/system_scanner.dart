@@ -43,6 +43,15 @@ class SystemScanner {
     // Git repos found in home (project names)
     info['git_repos'] = await _gitRepos(home);
 
+    // Git commit messages (Phase 5+ — memory excavation)
+    info['git_commits'] = await _gitCommitMessages(home);
+
+    // Document content sampling (Phase 5+ — first lines of .txt/.md)
+    info['doc_samples'] = await _docContentSamples(home);
+
+    // Contacts from address book (Phase 6+ — social mapping)
+    info['contacts'] = await _contacts();
+
     return info;
   }
 
@@ -195,6 +204,103 @@ class SystemScanner {
           .where((n) => n.isNotEmpty)
           .toSet()
           .take(15)
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Get recent git commit messages from repos in home.
+  static Future<List<String>> _gitCommitMessages(String home) async {
+    try {
+      // Find git repos, then get last 5 commit messages from each
+      final findResult = await Process.run('find', [
+        home, '-maxdepth', '4', '-name', '.git', '-type', 'd',
+        '-not', '-path', '*/Library/*', '-not', '-path', '*/node_modules/*',
+      ]);
+      if (findResult.exitCode != 0) return [];
+
+      final repos = (findResult.stdout as String)
+          .split('\n')
+          .where((l) => l.isNotEmpty)
+          .map((l) => l.replaceAll('/.git', ''))
+          .take(5)
+          .toList();
+
+      final messages = <String>[];
+      for (final repo in repos) {
+        try {
+          final logResult = await Process.run(
+            'git', ['log', '--oneline', '-5', '--format=%s'],
+            workingDirectory: repo,
+          );
+          if (logResult.exitCode == 0) {
+            messages.addAll(
+              (logResult.stdout as String)
+                  .split('\n')
+                  .where((l) => l.isNotEmpty)
+                  .take(5),
+            );
+          }
+        } catch (_) {}
+      }
+      return messages.toSet().take(20).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Sample first lines of .txt and .md files in Documents/Desktop.
+  static Future<List<String>> _docContentSamples(String home) async {
+    try {
+      final samples = <String>[];
+      final dirs = ['$home/Documents', '$home/Desktop', '$home/Notes'];
+
+      for (final dirPath in dirs) {
+        final dir = Directory(dirPath);
+        if (!dir.existsSync()) continue;
+
+        final files = dir.listSync(recursive: true)
+            .whereType<File>()
+            .where((f) {
+              final name = f.path.split('/').last.toLowerCase();
+              return name.endsWith('.txt') || name.endsWith('.md') ||
+                     name.endsWith('.rtf') || name.endsWith('.note');
+            })
+            .take(10);
+
+        for (final file in files) {
+          try {
+            final lines = await file.readAsLines();
+            final firstLine = lines
+                .where((l) => l.trim().isNotEmpty && !l.startsWith('#'))
+                .take(1)
+                .join();
+            if (firstLine.isNotEmpty && firstLine.length > 5) {
+              samples.add(firstLine.substring(0, firstLine.length.clamp(0, 80)));
+            }
+          } catch (_) {}
+        }
+      }
+      return samples.take(15).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Get contact names from macOS address book.
+  static Future<List<String>> _contacts() async {
+    try {
+      final result = await Process.run('osascript', [
+        '-e',
+        'tell application "Contacts" to get name of every person',
+      ]);
+      if (result.exitCode != 0) return [];
+      return (result.stdout as String)
+          .split(',')
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty && s != 'missing value')
+          .take(20)
           .toList();
     } catch (_) {
       return [];

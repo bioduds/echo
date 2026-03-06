@@ -90,6 +90,76 @@ class AiService {
     return jsonDecode(resp.body) as Map<String, dynamic>;
   }
 
+  /// Report kill time for a round to the brain.
+  Future<void> reportKillTime({
+    required int round,
+    required double killTimeSeconds,
+    required int shotsFired,
+    required int shotsHit,
+  }) async {
+    if (sessionId == null) return;
+    try {
+      await http.post(
+        Uri.parse('$baseUrl/kill_time'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'session_id': sessionId,
+          'round': round,
+          'kill_time_seconds': killTimeSeconds,
+          'shots_fired': shotsFired,
+          'shots_hit': shotsHit,
+        }),
+      );
+    } catch (_) {}
+  }
+
+  /// Request ghost speech lines for Phase 9.
+  Future<List<String>> getGhostLines({int count = 4}) async {
+    try {
+      final resp = await http.post(
+        Uri.parse('$baseUrl/ghost_lines'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'session_id': sessionId,
+          'count': count,
+        }),
+      );
+      if (resp.statusCode != 200) return [];
+      final data = jsonDecode(resp.body);
+      return List<String>.from(data['lines'] ?? []);
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Get the full profile dump for Phase 11 overlay.
+  Future<String> getProfileDump() async {
+    try {
+      final resp = await http.get(
+        Uri.parse('$baseUrl/profile_dump?session_id=$sessionId'),
+      );
+      if (resp.statusCode != 200) return 'PROFILE UNAVAILABLE';
+      final data = jsonDecode(resp.body);
+      return data['profile'] as String? ?? 'PROFILE UNAVAILABLE';
+    } catch (_) {
+      return 'PROFILE UNAVAILABLE';
+    }
+  }
+
+  /// Get revelation text lines for Phase 13.
+  Future<List<String>> getRevelationLines() async {
+    try {
+      final resp = await http.get(
+        Uri.parse('$baseUrl/revelation?session_id=$sessionId'),
+      );
+      if (resp.statusCode != 200) return [];
+      final data = jsonDecode(resp.body);
+      return List<String>.from(data['lines'] ?? []);
+    } catch (_) {
+      return [];
+    }
+  }
+
   Future<bool> checkHealth() async {
     try {
       final resp = await http.get(Uri.parse('$baseUrl/health'));

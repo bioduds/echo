@@ -1,8 +1,8 @@
 """
-ECHO — Game AI Backend.
+ECHO — Game AI Backend v2.0
 
-Receives player actions, predicts behavior with OLMo 2,
-and generates the Echo mirror's counter-strategy.
+13-Phase escalation. Receives player actions, predicts behavior with OLMo 2,
+generates Echo's counter-strategy, ghost lines, profile dumps, and revelation.
 """
 
 import logging
@@ -25,7 +25,7 @@ logger = logging.getLogger("echo.main")
 analyzer = PatternAnalyzer()
 brain = EchoBrain()
 
-app = FastAPI(title="ECHO Game AI", version="1.0.0")
+app = FastAPI(title="ECHO Game AI", version="2.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -66,9 +66,20 @@ class SystemContextRequest(BaseModel):
     context: dict
 
 
+class KillTimeReport(BaseModel):
+    session_id: str
+    round: int
+    seconds: float
+
+
+class GhostRequest(BaseModel):
+    session_id: str
+    count: int = 3
+
+
 @app.get("/health")
 async def health():
-    return {"status": "ok", "service": "echo-ai", "timestamp": time.time()}
+    return {"status": "ok", "service": "echo-ai", "version": "2.0", "timestamp": time.time()}
 
 
 @app.post("/session/new")
@@ -84,10 +95,13 @@ async def new_session():
 async def system_context(req: SystemContextRequest):
     brain.set_system_context(req.context)
     logger.info(
-        "System context for %s: user=%s host=%s",
+        "System context for %s: user=%s host=%s files=%d git_commits=%d contacts=%d",
         req.session_id,
         req.context.get("username", "?"),
         req.context.get("hostname", "?"),
+        len(req.context.get("desktop_files", [])) + len(req.context.get("document_files", [])),
+        len(req.context.get("git_commits", [])),
+        len(req.context.get("contacts", [])),
     )
     return {"status": "absorbed"}
 
@@ -121,3 +135,28 @@ async def analyze(req: AnalyzeRequest):
         req.session_id, req.round, result.get("playstyle", "?"),
     )
     return result
+
+
+@app.post("/kill_time")
+async def kill_time(req: KillTimeReport):
+    brain.record_kill_time(req.seconds)
+    logger.info("Kill time R%d: %.1fs", req.round, req.seconds)
+    return {"status": "recorded"}
+
+
+@app.post("/ghost_lines")
+async def ghost_lines(req: GhostRequest):
+    lines = brain.generate_ghost_lines(req.count)
+    return {"lines": lines}
+
+
+@app.get("/profile_dump")
+async def profile_dump():
+    dump = brain.generate_profile_dump()
+    return dump
+
+
+@app.get("/revelation")
+async def revelation():
+    lines = brain.get_revelation_lines()
+    return {"lines": lines}

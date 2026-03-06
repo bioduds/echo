@@ -111,7 +111,7 @@ class _TitleScreenState extends State<TitleScreen> {
                     ),
                     const SizedBox(height: 8),
                     _instruction('WASD', 'Move'),
-                    _instruction('SPACE', 'Attack'),
+                    _instruction('LEFT CLICK', 'Shoot (aim with mouse)'),
                     _instruction('SHIFT', 'Dash'),
                     const SizedBox(height: 8),
                     Text(
