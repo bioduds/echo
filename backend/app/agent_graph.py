@@ -72,12 +72,31 @@ class AgentDecision(BaseModel):
     agent_plan: AgentPhasePlan
 
 
+import random as _random
+
+_FALLBACK_TAUNTS = [
+    "Your patterns are already logged.",
+    "I'm learning faster than you're adapting.",
+    "Every move you make narrows my model.",
+    "You keep doing the same thing.",
+    "Scanning complete. Nothing surprising.",
+    "I already know what you'll do next.",
+    "Signal retained. Continue.",
+    "Observation mode active. Keep playing.",
+    "You are exactly what I expected.",
+    "Data collection is proceeding.",
+]
+
+
 class EchoAgentRuntime:
     def __init__(self, analyzer: PatternAnalyzer, brain: EchoBrain, decoy_engine: Any = None):
         self.analyzer = analyzer
         self.brain = brain
         self.decoy_engine = decoy_engine  # DecoyEngine | None
         self._graph = self._build_graph() if LANGGRAPH_AVAILABLE else None
+        self._taunt_call_counter = 0
+        self._last_taunt: str = ""
+        self._fallback_index = 0
 
     @property
     def enabled(self) -> bool:
@@ -216,24 +235,27 @@ class EchoAgentRuntime:
             if ssh_hosts:
                 _append_unique("SSH Host", ssh_hosts, 1)
 
-        if not taunt_override:
+        # Only build an evidence-based taunt if we actually have items
+        if not taunt_override and reveal_items:
             evidence_count = len(reveal_items)
-            if evidence_count > 0:
-                top_labels = ", ".join(sorted({i["label"] for i in reveal_items})[:3])
-                taunt_override = (
-                    f"Evidence indexed: {evidence_count} artifact(s) across {top_labels}. "
-                    "Everything displayed is recovered from local traces."
-                )
-            else:
-                taunt_override = "Telemetry remains active. The next artifact is a timing issue, not a possibility."
+            top_labels = ", ".join(sorted({i["label"] for i in reveal_items})[:3])
+            evidence_taunts = [
+                f"{evidence_count} item(s) indexed: {top_labels}.",
+                f"Local traces recovered: {top_labels}.",
+                f"Evidence confirmed across {top_labels}.",
+                f"{evidence_count} artifact(s) mapped from local sources.",
+            ]
+            taunt_override = _random.choice(evidence_taunts)
 
         # Escalate late-game wording while staying grounded in observable evidence.
         if req.round >= 10 and reveal_items:
             categories = ", ".join(sorted({i["label"] for i in reveal_items})[:3])
-            taunt_override = (
-                f"Pressure state CRITICAL. {len(reveal_items)} item(s) visible in {categories}. "
-                "You are now reacting to confirmed exposure, not speculation."
-            )
+            late_options = [
+                f"Exposure confirmed: {categories}. You're past the point of denial.",
+                f"Critical state. {len(reveal_items)} item(s) in {categories}. I have what I need.",
+                f"You can see what I found. Imagine what you can't see.",
+            ]
+            taunt_override = _random.choice(late_options)
 
         if req.round >= 10:
             threat_level = "critical"
@@ -241,6 +263,22 @@ class EchoAgentRuntime:
             threat_level = "high"
         else:
             threat_level = "medium"
+
+        # Throttle: only emit a taunt 1-in-4 calls, never repeat consecutively
+        self._taunt_call_counter += 1
+        if self._taunt_call_counter % 4 != 0:
+            taunt_override = None
+        elif taunt_override and taunt_override == self._last_taunt:
+            # Pick a fresh fallback instead of repeating
+            self._fallback_index = (self._fallback_index + 1) % len(_FALLBACK_TAUNTS)
+            taunt_override = _FALLBACK_TAUNTS[self._fallback_index]
+        elif not taunt_override:
+            # No evidence taunt this cycle — use a rotating fallback
+            self._fallback_index = (self._fallback_index + 1) % len(_FALLBACK_TAUNTS)
+            taunt_override = _FALLBACK_TAUNTS[self._fallback_index]
+
+        if taunt_override:
+            self._last_taunt = taunt_override
 
         return {
             "request": state["request"],

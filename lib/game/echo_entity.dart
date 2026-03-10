@@ -281,10 +281,10 @@ class EchoEntity extends CircleComponent
       healthCap = maxHealth * healthMult;
     }
 
-    // Show taunt if backend sent one (priority — overrides local)
+    // Show taunt if backend sent one (respects cooldown like local taunts)
     final taunt = action['taunt'] as String?;
     if (taunt != null) {
-      speech.showTaunt(taunt, priority: true);
+      speech.showTaunt(taunt);
     }
 
     if (dir != null && dir.length >= 2) {
