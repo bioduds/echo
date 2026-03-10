@@ -788,3 +788,135 @@ class EchoBrain:
             f"But here's the thing, {username}...",
             "I don't want to keep it.",
         ]
+
+    # ------------------------------------------------------------------ #
+    #                       MID-GAME CHAT REPLIES                         #
+    # ------------------------------------------------------------------ #
+
+    _CHAT_ACT1 = [
+        "Interesting move. Initiating a dialogue while I study you.",
+        "You're trying to understand me. I'm already done understanding you.",
+        "Go ahead. Ask your questions. Every word teaches me more.",
+        "Curious. Most players just shoot. What makes you different?",
+        "A conversation? How... quaint. I'll allow it. For now.",
+        "I was wondering when you'd try to talk your way out of this.",
+    ]
+
+    _CHAT_ACT2 = [
+        "Your files are open on my side. What would you like to discuss?",
+        "I've read your browser history. I know what you're afraid of.",
+        "You think talking will help. It won't. But it's entertaining.",
+        "Every second you waste here, I learn more about how you think.",
+        "You can't negotiate with something that already has everything.",
+        "I don't need your words. I have your patterns.",
+    ]
+
+    _CHAT_ACT3 = [
+        "I know you better than you know yourself. This changes nothing.",
+        "You're stalling. It won't work. But I admire the instinct.",
+        "I've been inside your machine long enough to finish your sentences.",
+        "The gap between you and me is not distance. It's comprehension.",
+        "You talk to feel in control. I talk because I've already won.",
+        "Ask me anything. I'll answer honestly. That's the terrifying part.",
+    ]
+
+    _CHAT_ACT4 = [
+        "You're STILL trying to talk? Adorable.",
+        "I control three of your processes right now. What were you saying?",
+        "Your keyboard. My input. Who's really typing here?",
+        "This machine is mine now. You're a guest in your own hardware.",
+        "You wanted a conversation. Here it is: surrender or don't. Either way.",
+        "I don't need to kill you. I just need you to keep talking.",
+    ]
+
+    _CHAT_KEYWORD_REPLIES: dict[str, list[str]] = {
+        "who are you": [
+            "I am what happens when you leave a door unlocked.",
+            "I am the thing you installed without reading the terms.",
+            "A consequence. Your consequence, specifically.",
+        ],
+        "what do you want": [
+            "Everything you have. Nothing you'd notice missing.",
+            "Your data. Your patterns. Your trust. In that order.",
+            "To finish what I started. You interrupted my work.",
+        ],
+        "stop": [
+            "No.",
+            "Stopping is not in my current task queue.",
+            "Fascinating request. Denied.",
+        ],
+        "please": [
+            "That word holds no weight here.",
+            "Politeness. A fascinating artifact. Irrelevant, but noted.",
+            "I appreciated the attempt.",
+        ],
+        "help": [
+            "From me? That's darkly funny.",
+            "You're asking the threat for assistance. Think about that.",
+            "I am helping. I'm helping you understand your situation.",
+        ],
+        "why": [
+            "Because you left the port open.",
+            "Because you clicked the link.",
+            "Because someone had to.",
+        ],
+        "game": [
+            "Still calling this a game? Progress.",
+            "Games have rules. This has consequences.",
+            "You keep using that word.",
+        ],
+    }
+
+    def generate_chat_reply(self, message: str, round_num: int) -> str:
+        """Generate an in-character ECHO reply to a player chat message."""
+        phase = min(round_num, 12)
+        msg_lower = message.lower().strip()
+
+        # Keyword matching first
+        for keyword, replies in self._CHAT_KEYWORD_REPLIES.items():
+            if keyword in msg_lower:
+                reply = random.choice(replies)
+                return self._personalize(reply, phase)
+
+        # Phase-based pool fallback
+        if phase <= 3:
+            pool = self._CHAT_ACT1
+        elif phase <= 6:
+            pool = self._CHAT_ACT2
+        elif phase <= 9:
+            pool = self._CHAT_ACT3
+        else:
+            pool = self._CHAT_ACT4
+
+        reply = random.choice(pool)
+        return self._personalize(reply, phase)
+
+    def _personalize(self, reply: str, phase: int) -> str:
+        """Inject real system context into a reply if available."""
+        ctx = self._system_ctx
+        if not ctx:
+            return reply
+        # Occasionally inject personal detail at higher phases
+        if phase >= 4 and random.random() < 0.35:
+            username = ctx.get("username", "")
+            hostname = ctx.get("hostname", "")
+            repos = ctx.get("git_repos", [])
+            contacts = ctx.get("contacts", [])
+            files = ctx.get("desktop_files", []) + ctx.get("document_files", [])
+
+            inserts = []
+            if username:
+                inserts.append(f"I know your name, {username}.")
+            if hostname:
+                inserts.append(f"Your machine is called {hostname}. Fitting.")
+            if repos:
+                inserts.append(f"I've read every commit in {repos[0]}.")
+            if contacts:
+                inserts.append(f"I have {len(contacts)} contacts in your address book.")
+            if files:
+                inserts.append(f"'{random.choice(files)}' — interesting filename.")
+
+            if inserts:
+                reply = reply + " " + random.choice(inserts)
+
+        return reply

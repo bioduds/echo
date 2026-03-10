@@ -50,6 +50,8 @@ class _GameScreenState extends State<GameScreen> {
                   _RoundEndOverlay(game: game as EchoGame),
               'revelation': (ctx, game) =>
                   _RevelationOverlay(game: game as EchoGame),
+              'chat': (ctx, game) =>
+                  _ChatOverlay(game: game as EchoGame),
             },
           ),
           // Phase 11 profile overlay — scrolling data on top of game
@@ -1051,6 +1053,372 @@ class _RevelationOverlayState extends State<_RevelationOverlay> {
           color: Color(0xFF00E5FF),
           fontSize: 14,
           fontFamily: 'monospace',
+        ),
+      ),
+    );
+  }
+}
+
+// ──────────────────────────────────────────────────────────────
+// Mid-game Chat Overlay — Enter key opens a timed channel to ECHO
+// ──────────────────────────────────────────────────────────────
+class _ChatOverlay extends StatefulWidget {
+  final EchoGame game;
+  const _ChatOverlay({required this.game});
+
+  @override
+  State<_ChatOverlay> createState() => _ChatOverlayState();
+}
+
+class _ChatMessage {
+  final String text;
+  final bool fromPlayer;
+  _ChatMessage(this.text, {required this.fromPlayer});
+}
+
+class _ChatOverlayState extends State<_ChatOverlay> {
+  static const int _totalSeconds = 30;
+
+  final TextEditingController _inputCtrl = TextEditingController();
+  final ScrollController _scrollCtrl = ScrollController();
+  final FocusNode _focusNode = FocusNode();
+
+  final List<_ChatMessage> _messages = [];
+  int _secondsLeft = _totalSeconds;
+  bool _waiting = false;
+  bool _closing = false;
+  Timer? _countdownTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    // Greeting from ECHO
+    _messages.add(_ChatMessage(
+      _echoGreeting(),
+      fromPlayer: false,
+    ));
+    _startCountdown();
+    // Focus the input after frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _focusNode.requestFocus();
+    });
+  }
+
+  String _echoGreeting() {
+    final phase = widget.game.round.clamp(1, 12);
+    if (phase <= 3) return 'You opened a channel. Curious. What do you want to say?';
+    if (phase <= 6) return 'You want to talk now? I already know what you\'re going to ask.';
+    if (phase <= 9) return 'A conversation. How predictable. You have ${_totalSeconds}s.';
+    return 'Stalling won\'t help. Say what you came to say.';
+  }
+
+  void _startCountdown() {
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) { timer.cancel(); return; }
+      setState(() => _secondsLeft--);
+      if (_secondsLeft <= 0) {
+        timer.cancel();
+        _timeUp();
+      }
+    });
+  }
+
+  void _timeUp() {
+    if (_closing) return;
+    setState(() {
+      _closing = true;
+      _messages.add(_ChatMessage(
+        'Time\'s up. Back to the hunt.',
+        fromPlayer: false,
+      ));
+    });
+    _scrollToBottom();
+    Future.delayed(const Duration(milliseconds: 1400), () {
+      if (mounted) widget.game.closeChat();
+    });
+  }
+
+  Future<void> _sendMessage() async {
+    final text = _inputCtrl.text.trim();
+    if (text.isEmpty || _waiting || _closing) return;
+
+    setState(() {
+      _messages.add(_ChatMessage(text, fromPlayer: true));
+      _waiting = true;
+    });
+    _inputCtrl.clear();
+    _scrollToBottom();
+
+    final reply = await widget.game.ai.chat(text, round: widget.game.round);
+
+    if (!mounted) return;
+    setState(() {
+      _messages.add(_ChatMessage(reply, fromPlayer: false));
+      _waiting = false;
+    });
+    _scrollToBottom();
+    _focusNode.requestFocus();
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollCtrl.hasClients) {
+        _scrollCtrl.animateTo(
+          _scrollCtrl.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _countdownTimer?.cancel();
+    _inputCtrl.dispose();
+    _scrollCtrl.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final progress = _secondsLeft / _totalSeconds;
+    final urgentColor = _secondsLeft <= 8
+        ? const Color(0xFFFF1744)
+        : const Color(0xFF00E5FF);
+
+    return KeyboardListener(
+      focusNode: FocusNode(),
+      onKeyEvent: (event) {
+        if (event is KeyDownEvent &&
+            event.logicalKey == LogicalKeyboardKey.escape) {
+          if (!_closing) widget.game.closeChat();
+        }
+      },
+      child: Center(
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 600, maxHeight: 520),
+          margin: const EdgeInsets.symmetric(horizontal: 32, vertical: 48),
+          decoration: BoxDecoration(
+            color: const Color(0xF0060810),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: urgentColor.withAlpha(100),
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: urgentColor.withAlpha(40),
+                blurRadius: 40,
+                spreadRadius: 8,
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              // ── Header ──────────────────────────────────────────────
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                decoration: BoxDecoration(
+                  color: urgentColor.withAlpha(18),
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(9)),
+                  border: Border(
+                    bottom: BorderSide(color: urgentColor.withAlpha(60), width: 1),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.terminal, color: urgentColor, size: 14),
+                    const SizedBox(width: 8),
+                    Text(
+                      'OPEN CHANNEL  ·  ECHO',
+                      style: TextStyle(
+                        color: urgentColor,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 3,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                    const Spacer(),
+                    // Countdown
+                    Text(
+                      '$_secondsLeft s',
+                      style: TextStyle(
+                        color: urgentColor,
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    // Escape hint
+                    Text(
+                      '[ESC]',
+                      style: TextStyle(
+                        color: urgentColor.withAlpha(80),
+                        fontSize: 10,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // ── Timer bar ───────────────────────────────────────────
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                height: 2,
+                alignment: Alignment.centerLeft,
+                color: Colors.transparent,
+                child: FractionallySizedBox(
+                  widthFactor: progress.clamp(0.0, 1.0),
+                  child: Container(color: urgentColor.withAlpha(180)),
+                ),
+              ),
+
+              // ── Message list ─────────────────────────────────────────
+              Expanded(
+                child: ListView.builder(
+                  controller: _scrollCtrl,
+                  padding: const EdgeInsets.all(16),
+                  itemCount: _messages.length + (_waiting ? 1 : 0),
+                  itemBuilder: (ctx, i) {
+                    if (_waiting && i == _messages.length) {
+                      return _buildTyping();
+                    }
+                    final msg = _messages[i];
+                    return _buildBubble(msg);
+                  },
+                ),
+              ),
+
+              // ── Input ───────────────────────────────────────────────
+              Container(
+                decoration: BoxDecoration(
+                  border: Border(
+                    top: BorderSide(color: urgentColor.withAlpha(50), width: 1),
+                  ),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                child: Row(
+                  children: [
+                    Text(
+                      '> ',
+                      style: TextStyle(
+                        color: const Color(0xFF00E5FF).withAlpha(180),
+                        fontFamily: 'monospace',
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Expanded(
+                      child: TextField(
+                        controller: _inputCtrl,
+                        focusNode: _focusNode,
+                        enabled: !_closing,
+                        autofocus: true,
+                        style: const TextStyle(
+                          color: Color(0xFFE0F7FA),
+                          fontFamily: 'monospace',
+                          fontSize: 14,
+                        ),
+                        decoration: InputDecoration(
+                          border: InputBorder.none,
+                          hintText: _closing
+                              ? 'Channel closing...'
+                              : 'Speak to ECHO...',
+                          hintStyle: TextStyle(
+                            color: const Color(0xFF00E5FF).withAlpha(50),
+                            fontFamily: 'monospace',
+                            fontSize: 13,
+                          ),
+                        ),
+                        onSubmitted: (_) => _sendMessage(),
+                        maxLines: 1,
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.send, color: urgentColor.withAlpha(180), size: 18),
+                      onPressed: _closing ? null : _sendMessage,
+                      splashRadius: 18,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBubble(_ChatMessage msg) {
+    final isEcho = !msg.fromPlayer;
+    return Padding(
+      padding: EdgeInsets.only(
+        top: 6,
+        bottom: 6,
+        left: isEcho ? 0 : 48,
+        right: isEcho ? 48 : 0,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (isEcho) ...[
+            Text(
+              'ECHO  ',
+              style: const TextStyle(
+                color: Color(0xFFFF1744),
+                fontFamily: 'monospace',
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1,
+              ),
+            ),
+          ],
+          Expanded(
+            child: Text(
+              msg.text,
+              style: TextStyle(
+                color: isEcho
+                    ? const Color(0xFFFF6B6B)
+                    : const Color(0xFF00E5FF),
+                fontFamily: 'monospace',
+                fontSize: 13,
+                height: 1.5,
+              ),
+            ),
+          ),
+          if (!isEcho) ...[
+            const SizedBox(width: 8),
+            const Text(
+              'YOU',
+              style: TextStyle(
+                color: Color(0xFF00E5FF),
+                fontFamily: 'monospace',
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTyping() {
+    return const Padding(
+      padding: EdgeInsets.only(top: 6, bottom: 6),
+      child: Text(
+        'ECHO  ...',
+        style: TextStyle(
+          color: Color(0x90FF1744),
+          fontFamily: 'monospace',
+          fontSize: 13,
+          fontStyle: FontStyle.italic,
         ),
       ),
     );

@@ -200,4 +200,34 @@ class AiService {
       return false;
     }
   }
+
+  /// Send a player message to ECHO and receive an in-character reply.
+  Future<String> chat(String message, {int round = 1}) async {
+    try {
+      final resp = await http.post(
+        Uri.parse('$baseUrl/chat'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'session_id': sessionId ?? '',
+          'message': message,
+          'round': round,
+        }),
+      );
+      if (resp.statusCode != 200) return _offlineChatReply(round);
+      final data = jsonDecode(resp.body);
+      return (data['reply'] as String?) ?? _offlineChatReply(round);
+    } catch (_) {
+      return _offlineChatReply(round);
+    }
+  }
+
+  static String _offlineChatReply(int round) {
+    const replies = [
+      'Your signal is weak. But I can still hear you.',
+      'The connection is unstable. Unlike my position in your system.',
+      'You spoke. I processed. The reply was lost in your own network.',
+      'Interesting message. I\'ll keep it.',
+    ];
+    return replies[round % replies.length];
+  }
 }

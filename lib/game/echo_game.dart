@@ -70,6 +70,23 @@ class EchoGame extends FlameGame
   int shotsFired = 0;
   int shotsHit = 0;
 
+  // Mid-game chat channel
+  bool chatActive = false;
+
+  void openChat() {
+    if (!roundActive || chatActive) return;
+    chatActive = true;
+    pauseEngine();
+    overlays.add('chat');
+  }
+
+  void closeChat() {
+    if (!chatActive) return;
+    chatActive = false;
+    overlays.remove('chat');
+    resumeEngine();
+  }
+
   // Data reveal timer — drips real threats onto screen
   double _dataRevealTimer = 0;
   static const double _dataRevealInterval = 1.2;

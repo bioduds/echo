@@ -194,6 +194,23 @@ async def revelation():
 
 
 # ──────────────────────────────────────────────────────────────────────────
+# MID-GAME CHAT ENDPOINT — Player opens a channel to ECHO
+# ──────────────────────────────────────────────────────────────────────────
+
+class ChatRequest(BaseModel):
+    session_id: str
+    message: str
+    round: int = 1
+
+
+@app.post("/chat")
+async def chat(req: ChatRequest):
+    reply = brain.generate_chat_reply(req.message, req.round)
+    logger.info("Chat R%d [%s]: %s → %s", req.round, req.session_id, req.message[:60], reply[:60])
+    return {"reply": reply}
+
+
+# ──────────────────────────────────────────────────────────────────────────
 # PAYMENT SAFEGUARD ENDPOINTS — Phase 13 Negotiation
 # ──────────────────────────────────────────────────────────────────────────
 

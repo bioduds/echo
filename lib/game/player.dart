@@ -112,6 +112,11 @@ class Player extends CircleComponent
     _keysPressed.addAll(keysPressed);
 
     if (event is KeyDownEvent) {
+      if (event.logicalKey == LogicalKeyboardKey.enter ||
+          event.logicalKey == LogicalKeyboardKey.numpadEnter) {
+        game.openChat();
+        return true;
+      }
       if (event.logicalKey == LogicalKeyboardKey.shiftLeft ||
           event.logicalKey == LogicalKeyboardKey.shiftRight) {
         _tryDash();
