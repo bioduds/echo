@@ -111,6 +111,32 @@ class Hud extends PositionComponent with HasGameReference<EchoGame> {
         Vector2(game.size.x / 2 - 50, game.size.y - 30),
       );
     }
+
+    // Chat channel indicator (bottom-center)
+    if (game.roundActive && !game.chatActive) {
+      final chatCooldown = game.chatCooldown;
+      final chatReady = chatCooldown <= 0;
+      final chatLabel = chatReady
+          ? '[ENTER] TALK TO ECHO'
+          : '[ENTER] CHANNEL LOCKED  ${chatCooldown.ceil()}s';
+      final chatColor = chatReady
+          ? const Color(0x50FF1744)
+          : const Color(0x30888888);
+      final chatText = TextPaint(
+        style: TextStyle(
+          color: chatColor,
+          fontSize: 10,
+          fontFamily: 'monospace',
+          fontWeight: FontWeight.bold,
+          letterSpacing: 1,
+        ),
+      );
+      chatText.render(
+        canvas,
+        chatLabel,
+        Vector2(game.size.x / 2 - 90, game.size.y - 18),
+      );
+    }
   }
 
   void _drawHealthBar(

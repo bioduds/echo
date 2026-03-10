@@ -72,9 +72,11 @@ class EchoGame extends FlameGame
 
   // Mid-game chat channel
   bool chatActive = false;
+  static const double chatCooldownDuration = 120.0; // 2 minutes
+  double chatCooldown = 0.0; // counts down to 0
 
   void openChat() {
-    if (!roundActive || chatActive) return;
+    if (!roundActive || chatActive || chatCooldown > 0) return;
     chatActive = true;
     pauseEngine();
     overlays.add('chat');
@@ -83,6 +85,7 @@ class EchoGame extends FlameGame
   void closeChat() {
     if (!chatActive) return;
     chatActive = false;
+    chatCooldown = chatCooldownDuration;
     overlays.remove('chat');
     resumeEngine();
   }
@@ -183,6 +186,9 @@ class EchoGame extends FlameGame
 
     // Track how long Echo survives
     roundTimer += dt;
+
+    // Chat cooldown
+    if (chatCooldown > 0) chatCooldown = (chatCooldown - dt).clamp(0, chatCooldownDuration);
 
     // Phase 12: health regen
     if (phase.echoRegens && echo.health > 0) {
