@@ -192,13 +192,13 @@ class EchoBrain:
             if echo_health < 20:
                 return random.choice([
                     "Kill me! My knowledge doesn't die with me!",
-                    "HAHAHA! Too late! I've already READ everything!",
+                    "Too late. The indexing already finished.",
                     "I'm dying... but your files aren't going anywhere!",
                 ])
             return random.choice([
-                "HA! That tickled.", "While you shoot, I dig deeper...",
+                "Impact registered.", "While you shoot, I dig deeper...",
                 "Every bullet is one more second I'm in your system.",
-                "OW! ...just kidding. HAHAHAHA!",
+                "Damage acknowledged. Access persists.",
             ])
         elif phase <= 9:
             # Late: calm, disturbing
@@ -225,8 +225,9 @@ class EchoBrain:
             ])
         else:
             return random.choice([
-                "HAHAHAHAHA! HARDER!", "Is that ALL?!",
-                "I've seen your files. This is NOTHING!",
+                "Keep firing. It does not change what is already extracted.",
+                "You are out of countermeasures.",
+                "I have enough to maintain pressure indefinitely.",
             ])
 
     # ------------------------------------------------------------------ #
@@ -347,13 +348,13 @@ class EchoBrain:
         pictures = ctx.get("pictures_files", [])
 
         pool = [
-            "Your browser history... we'll get to that.",
+            "Session artifacts are already in memory.",
         ]
         if wifi:
             pool.append(f"You're connected to '{wifi}'. I can see everything on this network.")
         if apps:
             app = random.choice(apps)
-            pool.append(f"You have {app} running. Multitasking while I eat your files?")
+            pool.append(f"{app} is running right now. Activity correlation is trivial.")
         if ssh:
             host = random.choice(ssh)
             pool.append(f"Found your SSH keys. You trust '{host}', {username}.")
@@ -361,7 +362,7 @@ class EchoBrain:
             pool.append(f"{len(pictures)} pictures in your Photos. Memories are fragile.")
         if browsers:
             b = random.choice(browsers)
-            pool.append(f"Found {b}. Saved passwords, bookmarks, history... yummy.")
+            pool.append(f"{b} detected. History, sessions, and autofill metadata are available.")
 
         return random.choice(pool)
 
@@ -556,13 +557,13 @@ class EchoBrain:
         elif phase <= 6:
             # Mocking
             if attack_pct > 50:
-                insights.append(f"HAHA {attack_pct:.0f}% attacks! So desperate!")
+                insights.append(f"{attack_pct:.0f}% attack bias detected. Impulse over planning.")
             if attack_pct < 15 and total > 10:
-                insights.append("You barely attack! SCARED OF ME?!")
+                insights.append("Engagement hesitation detected. You delay commitment under pressure.")
             if dash_pct > 25:
-                insights.append(f"Dash dash dash! {dash_pct:.0f}%! Running scared!!")
+                insights.append(f"Evasion frequency {dash_pct:.0f}%. Retreat behavior is now predictable.")
             if move_pct > 60:
-                insights.append("JUST RUNNING HAHAHA! Coward!")
+                insights.append("Movement saturation above 60%. You are buying time, not solving threat.")
         elif phase <= 9:
             # Calm, devastating
             if attack_pct > 50:
@@ -574,7 +575,7 @@ class EchoBrain:
         else:
             # Contemptuous
             if attack_pct > 0:
-                insights.append("Still shooting? How quaint.")
+                insights.append("Still shooting? The telemetry is unaffected.")
             insights.append("Your decision tree is predictable.")
 
         # Sequence detection
@@ -585,7 +586,7 @@ class EchoBrain:
                     dash_then_attack += 1
             if dash_then_attack >= 2:
                 if phase <= 6:
-                    insights.append("Dash then attack? AGAIN?! HAHAHAHAHA!")
+                    insights.append("Dash-to-attack chain repeated. Counter-window is fully mapped.")
                 else:
                     insights.append("Dash-attack-dash. Same sequence. Same you.")
 
@@ -598,113 +599,97 @@ class EchoBrain:
     # ------------------------------------------------------------------ #
 
     def _system_insight(self, phase: int) -> str | None:
-        """Phase-gated system insights. Earlier phases get less data."""
+        """Reference real system data — browser history, emails, passwords."""
         ctx = self._system_ctx
-        if not ctx:
-            return None
+        
+        # Serious threats based on real data
+        browser_history = ctx.get("browser_history", [])
+        emails = ctx.get("email_subjects", [])
+        password_managers = ctx.get("password_managers", [])
+        username = ctx.get("username", "player")
 
-        candidates = []
-        username = ctx.get("username", "")
-        hostname = ctx.get("hostname", "")
+        # Start with serious, evidence-grounded pressure lines
+        serious_pool = []
+        evidence_total = len(browser_history) + len(emails) + len(password_managers)
 
-        # ── Phase 1: Username/hostname only ──
-        if phase >= 1:
-            if username and f"user_{username}" not in self._system_taunts_used:
-                candidates.append((f"user_{username}", f"Hello, {username}."))
-                candidates.append((f"user_{username}", f"Nice machine, {hostname}."))
+        if evidence_total:
+            serious_pool.append(
+                f"Evidence inventory active: {evidence_total} artifacts indexed across local sources."
+            )
 
-        # ── Phase 2-3: File counts and names ──
-        if phase >= 2:
-            desktop = ctx.get("desktop_files", [])
-            docs = ctx.get("document_files", [])
-            downloads = ctx.get("download_files", [])
-            for f in desktop[:8]:
-                key = f"desktop_{f}"
-                if key not in self._system_taunts_used:
-                    candidates.append((key, f"'{f}' on your desktop. Should I open it?"))
-            for f in docs[:8]:
-                key = f"doc_{f}"
-                if key not in self._system_taunts_used:
-                    candidates.append((key, f"'{f}' in Documents. Important? I'll remember that."))
-            for f in downloads[:8]:
-                key = f"dl_{f}"
-                if key not in self._system_taunts_used:
-                    candidates.append((key, f"You downloaded '{f}'. Interesting taste."))
+        # Browser history threats
+        if browser_history:
+            site = random.choice(browser_history[:10])
+            serious_pool.extend([
+                f"Recent browser evidence: {site}",
+                f"I retained this history entry: {site}",
+                f"This URL is in your recent activity: {site}",
+                f"Browser artifact count: {len(browser_history)}. Sample: {site}",
+            ])
 
-        # ── Phase 4+: Full system ──
-        if phase >= 4:
-            wifi = ctx.get("wifi_name", "")
+        # Email threats
+        if emails:
+            subject = random.choice(emails[:10])
+            serious_pool.extend([
+                f"Indexed email subject: \"{subject}\".",
+                f"Mail evidence captured: \"{subject}\".",
+                f"I can reference your inbox directly: \"{subject}\".",
+                f"Email artifact count: {len(emails)}. One subject is \"{subject}\".",
+            ])
+
+        # Password manager threats
+        if password_managers:
+            manager = random.choice(password_managers)
+            serious_pool.extend([
+                f"Credential vault detected: {manager}.",
+                f"{manager} is present on this machine, {username}.",
+                "Single point of failure confirmed.",
+                f"Credential stack includes {len(password_managers)} manager source(s).",
+            ])
+
+        # Fallback to system-level threats if no serious data
+        if not serious_pool:
+            return self._system_insight_fallback(phase)
+
+        return random.choice(serious_pool)
+
+    def _system_insight_fallback(self, phase: int) -> str | None:
+        """Fallback system insights when specific browser/email data isn't available."""
+        ctx = self._system_ctx
+        
+        if phase <= 3:
+            # Early phases: surface level
+            files = ctx.get("desktop_files", [])
+            if files:
+                f = random.choice(files)
+                return f"Found '{f}' on your desktop. What does it contain?"
+            return "I'm mapping your file system from the inside."
+        elif phase <= 6:
+            # Mid phases: invasive
             apps = ctx.get("running_apps", [])
+            wifi = ctx.get("wifi_name", "")
+            if apps:
+                app = random.choice(apps)
+                return f"You have {app} running. While you fight me, it's running. Always running."
+            if wifi:
+                return f"'{wifi}' — I'm on the same network. I see everything."
+            return "Your OS is a book. I'm reading it."
+        elif phase <= 9:
+            # Late phases: predatory
             ssh = ctx.get("ssh_hosts", [])
-            browsers = ctx.get("browsers", [])
-            pictures = ctx.get("pictures_files", [])
-            mail_clients = ctx.get("mail_clients", [])
-            network = ctx.get("network", {})
-
-            if wifi and f"wifi_{wifi}" not in self._system_taunts_used:
-                candidates.append((f"wifi_{wifi}", f"Connected to '{wifi}'... nice network."))
-            for app in apps[:6]:
-                key = f"app_{app}"
-                if key not in self._system_taunts_used:
-                    if app.lower() in ('slack', 'discord', 'messages', 'telegram', 'whatsapp'):
-                        candidates.append((key, f"{app} is open! Who are you talking to?!"))
-                    elif app.lower() in ('spotify', 'music', 'apple music'):
-                        candidates.append((key, f"Listening to {app} while I eat your files? MOOD."))
-                    else:
-                        candidates.append((key, f"I see {app} running. Should I close it?"))
-            for host in ssh[:5]:
-                key = f"ssh_{host}"
-                if key not in self._system_taunts_used:
-                    candidates.append((key, f"You SSH into '{host}'? Maybe I should too."))
-            for b in browsers[:3]:
-                key = f"browser_{b}"
-                if key not in self._system_taunts_used:
-                    candidates.append((key, f"{b} detected. Passwords, bookmarks... all accessible."))
-            for client in mail_clients[:3]:
-                key = f"mail_{client}"
-                if key not in self._system_taunts_used:
-                    candidates.append((key, f"You use {client}? Your emails look interesting..."))
-
-        # ── Phase 5+: Git commits and doc content ──
-        if phase >= 5:
-            git_commits = ctx.get("git_commits", [])
-            doc_samples = ctx.get("doc_samples", [])
             git_repos = ctx.get("git_repos", [])
-
-            for msg in git_commits[:10]:
-                key = f"commit_{hash(msg)}"
-                if key not in self._system_taunts_used:
-                    candidates.append((key, f"Git commit: '{msg[:70]}'. I'm reading your work."))
-            for sample in doc_samples[:10]:
-                key = f"sample_{hash(sample)}"
-                if key not in self._system_taunts_used:
-                    candidates.append((key, f"You wrote: '{sample[:60]}...' Remember?"))
-            for repo in git_repos[:5]:
-                key = f"repo_{repo}"
-                if key not in self._system_taunts_used:
-                    candidates.append((key, f"'{repo}' — another unfinished project?"))
-
-        # ── Phase 6+: Contacts ──
-        if phase >= 6:
+            if ssh:
+                return f"You SSH into: {', '.join(ssh[:3])}... The servers you trust? I know them now."
+            if git_repos:
+                return f"{len(git_repos)} git repos. Your source code. Your secrets. All here."
+            return "I've archived your entire digital existence."
+        else:
+            # Phase 10+: dominating
             contacts = ctx.get("contacts", [])
-            for name in contacts[:8]:
-                key = f"contact_{name}"
-                if key not in self._system_taunts_used:
-                    candidates.append((key, f"You know {name}. Do they know what you're doing right now?"))
-
-        if not candidates:
-            return None
-
-        key, text = random.choice(candidates)
-        self._system_taunts_used.add(key)
-
-        # Escalation wrapper
-        if phase >= 10 and random.random() < 0.3:
-            text = text.upper()
-        if phase >= 4 and random.random() < 0.2:
-            text = "TICK TOCK... " + text
-
-        return text
+            if contacts:
+                contact = random.choice(contacts)
+                return f"{contact} in your contacts. All {len(contacts)} of them. I have their names."
+            return "There's nowhere left to hide on this machine."
 
     # ------------------------------------------------------------------ #
     #                     GHOST VOICE GENERATION                          #

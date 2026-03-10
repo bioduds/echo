@@ -133,17 +133,49 @@ class AiService {
   }
 
   /// Get the full profile dump for Phase 11 overlay.
+  /// Uses the DecoyEngine-powered /profile/{session_id} endpoint for
+  /// a richer, cross-round accumulated dossier.
   Future<String> getProfileDump() async {
+    if (sessionId == null) return 'PROFILE UNAVAILABLE';
     try {
       final resp = await http.get(
-        Uri.parse('$baseUrl/profile_dump?session_id=$sessionId'),
+        Uri.parse('$baseUrl/profile/$sessionId'),
       );
-      if (resp.statusCode != 200) return 'PROFILE UNAVAILABLE';
-      final data = jsonDecode(resp.body);
-      return data['profile'] as String? ?? 'PROFILE UNAVAILABLE';
+      if (resp.statusCode == 200) {
+        final data = jsonDecode(resp.body) as Map<String, dynamic>;
+        final lines = data['profile_lines'] as List<dynamic>? ?? [];
+        if (lines.isNotEmpty) {
+          // Format as monospace terminal block for the scrolling overlay
+          return lines.map((l) {
+            final key = (l['key'] ?? '') as String;
+            final val = (l['value'] ?? '') as String;
+            return '${key.padRight(28)}: $val';
+          }).join('\n');
+        }
+      }
+      // Fallback: legacy profile_dump endpoint
+      final fallback = await http.get(
+        Uri.parse('$baseUrl/profile_dump'),
+      );
+      if (fallback.statusCode != 200) return 'PROFILE UNAVAILABLE';
+      final data = jsonDecode(fallback.body);
+      return data['profile'] as String? ??
+          _formatLegacyDump(data as Map<String, dynamic>);
     } catch (_) {
       return 'PROFILE UNAVAILABLE';
     }
+  }
+
+  static String _formatLegacyDump(Map<String, dynamic> d) {
+    return [
+      'SUBJECT              : ${d['username'] ?? '?'}@${d['hostname'] ?? '?'}',
+      'FILES ACCESSED       : ${d['total_files'] ?? '?'}',
+      'REPO COUNT           : ${d['repo_count'] ?? '?'}',
+      'CONTACTS             : ${d['contact_count'] ?? '?'}',
+      'PREDICTION ACCURACY  : ${d['prediction_accuracy'] ?? '?'}%',
+      'BEHAVIORAL MODEL     : COMPLETE',
+      'STATUS               : FULLY COMPROMISED',
+    ].join('\n');
   }
 
   /// Get revelation text lines for Phase 13.

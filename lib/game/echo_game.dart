@@ -9,15 +9,18 @@ import 'echo_entity.dart';
 import 'ghost_entity.dart';
 import 'arena.dart';
 import 'hud.dart';
+import 'data_reveal.dart';
 import 'phase_config.dart';
 
 class EchoGame extends FlameGame
     with HasKeyboardHandlerComponents, HasCollisionDetection, TapCallbacks, MouseMovementDetector {
   final String backendUrl;
+  late final String sessionId;
 
   late Player player;
   late EchoEntity echo;
   late AiService ai;
+  late DataRevealPanel dataReveal;
 
   int round = 1;
   bool roundActive = false;
@@ -67,6 +70,19 @@ class EchoGame extends FlameGame
   int shotsFired = 0;
   int shotsHit = 0;
 
+  // Data reveal timer — drips real threats onto screen
+  double _dataRevealTimer = 0;
+  static const double _dataRevealInterval = 1.2;
+  final List<String> _agentRevealQueue = [];
+
+  double get _currentRevealInterval {
+    final p = currentPhase.phase;
+    if (p >= 10) return 0.55;
+    if (p >= 7) return 0.8;
+    if (p >= 4) return 1.0;
+    return _dataRevealInterval;
+  }
+
   EchoGame({required this.backendUrl});
 
   @override
@@ -85,9 +101,14 @@ class EchoGame extends FlameGame
   Future<void> onLoad() async {
     ai = AiService(baseUrl: backendUrl);
     await ai.newSession();
+    sessionId = ai.sessionId ?? 'unknown';
 
     // Scan system and send context to backend (async, non-blocking)
-    SystemScanner.scan().then((ctx) => ai.sendSystemContext(ctx)).catchError((_) {});
+    SystemScanner.scan().then((ctx) {
+      ai.sendSystemContext(ctx);
+      // Start revealing data from the scan
+      _initializeDataReveals(ctx);
+    }).catchError((_) {});
 
     add(Arena());
 
@@ -97,11 +118,37 @@ class EchoGame extends FlameGame
     echo = EchoEntity()..position = Vector2(size.x * 0.75, size.y * 0.5);
     add(echo);
 
+    dataReveal = DataRevealPanel();
+    add(dataReveal);
+
     add(Hud());
 
     roundActive = true;
     roundTimer = 0;
   }
+
+  void _initializeDataReveals(Map<String, dynamic> systemInfo) {
+    // Pre-load browser history, emails, and passwords for revealing
+    if (systemInfo['browser_history'] is List) {
+      final history = (systemInfo['browser_history'] as List).cast<String>();
+      _browserHistoryQueue.addAll(history.take(15));
+    }
+    if (systemInfo['email_subjects'] is List) {
+      final emails = (systemInfo['email_subjects'] as List).cast<String>();
+      _emailQueue.addAll(emails.take(15));
+    }
+    if (systemInfo['password_managers'] is List) {
+      final pwManagers = (systemInfo['password_managers'] as List).cast<String>();
+      for (final manager in pwManagers) {
+        _revealData('Password Manager', manager);
+      }
+    }
+  }
+
+  final List<String> _browserHistoryQueue = [];
+  final List<String> _emailQueue = [];
+  final Set<String> _revealDedup = <String>{};
+  String _lastThreatLevel = 'low';
 
   @override
   void update(double dt) {
@@ -127,6 +174,23 @@ class EchoGame extends FlameGame
         echo.health = (echo.health + _regenRate * _regenTimer)
             .clamp(0, echo.healthCap);
         _regenTimer = 0;
+      }
+    }
+
+    // Drip revealed data onto screen
+    _dataRevealTimer += dt;
+    if (_dataRevealTimer >= _currentRevealInterval) {
+      _dataRevealTimer = 0;
+      if (_agentRevealQueue.isNotEmpty) {
+        final item = _agentRevealQueue.removeAt(0);
+        final split = item.indexOf('|');
+        if (split > 0) {
+          _revealData(item.substring(0, split), item.substring(split + 1));
+        }
+      } else if (_browserHistoryQueue.isNotEmpty) {
+        _revealData('Browser', _browserHistoryQueue.removeAt(0));
+      } else if (_emailQueue.isNotEmpty) {
+        _revealData('Email', _emailQueue.removeAt(0));
       }
     }
 
@@ -188,6 +252,26 @@ class EchoGame extends FlameGame
     shotsHit++;
   }
 
+  void _revealData(String label, String value) {
+    dataReveal.revealItem(label, value);
+  }
+
+  void _ingestRevealItems(dynamic items) {
+    if (items is! List) return;
+
+    for (final raw in items) {
+      if (raw is! Map) continue;
+      final label = (raw['label'] ?? 'Intel').toString();
+      final value = (raw['value'] ?? '').toString().trim();
+      if (value.isEmpty) continue;
+
+      final fp = '$label|$value';
+      if (_revealDedup.contains(fp)) continue;
+      _revealDedup.add(fp);
+      _agentRevealQueue.add('$label|$value');
+    }
+  }
+
   void recordAction(Map<String, dynamic> action) {
     action['timestamp'] = DateTime.now().millisecondsSinceEpoch;
     action['round'] = round;
@@ -210,6 +294,29 @@ class EchoGame extends FlameGame
         echoHealth: echo.health,
         round: round,
       );
+
+      _ingestRevealItems(prediction['reveal_items']);
+
+      final threatLevel = (prediction['threat_level'] as String? ?? 'low').toLowerCase();
+      dataReveal.setThreatLevel(threatLevel);
+      if (threatLevel != _lastThreatLevel) {
+        _lastThreatLevel = threatLevel;
+        final key = 'Threat|${threatLevel.toUpperCase()}';
+        if (!_revealDedup.contains(key)) {
+          _revealDedup.add(key);
+          _agentRevealQueue.add(key);
+        }
+      }
+
+      final taunt = prediction['taunt'] as String?;
+      if (taunt != null && taunt.trim().isNotEmpty) {
+        final key = 'Echo|$taunt';
+        if (!_revealDedup.contains(key)) {
+          _revealDedup.add(key);
+          _agentRevealQueue.add(key);
+        }
+      }
+
       echo.executeAction(prediction);
     } catch (_) {
       echo.executeFallback(player.position);

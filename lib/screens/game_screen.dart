@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flame/game.dart';
 import '../game/echo_game.dart';
 import '../game/phase_config.dart';
+import '../services/payment_service.dart';
 
 class GameScreen extends StatefulWidget {
   final String backendUrl;
@@ -19,11 +21,26 @@ class _GameScreenState extends State<GameScreen> {
   void initState() {
     super.initState();
     _game = EchoGame(backendUrl: widget.backendUrl);
+    // Enter fullscreen
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Future.delayed(const Duration(milliseconds: 100), () {
+        if (mounted) {
+          // Hide system UI for fullscreen effect
+          _enterFullscreen();
+        }
+      });
+    });
+  }
+
+  void _enterFullscreen() {
+    // Hide overlay UI; desktop fullscreen is enforced in MainFlutterWindow.swift.
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.black,
       body: Stack(
         children: [
           GameWidget(
@@ -149,7 +166,7 @@ class _RoundEndOverlay extends StatelessWidget {
 
     return Center(
       child: Container(
-        constraints: const BoxConstraints(maxWidth: 500),
+        constraints: const BoxConstraints(maxWidth: 560, maxHeight: 680),
         margin: const EdgeInsets.all(40),
         padding: const EdgeInsets.all(32),
         decoration: BoxDecoration(
@@ -164,9 +181,10 @@ class _RoundEndOverlay extends StatelessWidget {
             ),
           ],
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
             Text(
               'ECHO ELIMINATED',
               style: TextStyle(
@@ -340,7 +358,8 @@ class _RoundEndOverlay extends StatelessWidget {
                 ),
               ),
             ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -365,12 +384,22 @@ class _RevelationOverlayState extends State<_RevelationOverlay> {
   bool _showNegotiation = false;
   bool _showDeclineResponse = false;
   bool _showDonationPrompt = false;
+  bool _showPurgeSequence = false;
   bool _showFinalScreen = false;
   bool _paidOrDonated = false;
+  
+  late PaymentService _paymentService;
+  String? _paymentError;
+  double _purgeProgress = 0.0;
+  List<PurgeStage> _purgeStages = [];
 
   @override
   void initState() {
     super.initState();
+    _paymentService = PaymentService(
+      baseUrl: widget.game.backendUrl,
+      sessionId: widget.game.sessionId,
+    );
     _loadRevelation();
   }
 
@@ -409,17 +438,40 @@ class _RevelationOverlayState extends State<_RevelationOverlay> {
   @override
   void dispose() {
     _typeTimer?.cancel();
+    _paymentService.dispose();
     super.dispose();
   }
 
-  void _onAccept() {
-    // In a real app, this would trigger in-app purchase.
-    // For now, show the "paid" ending.
-    setState(() {
-      _showNegotiation = false;
-      _paidOrDonated = true;
-      _showFinalScreen = true;
-    });
+  void _onAccept() async {
+    // Initiate real in-app purchase
+    setState(() => _paymentError = null);
+    
+    try {
+      final txn = await _paymentService.initiatePayment();
+      
+      // Payment successful — show purge animation
+      _showPurgeSequence = true;
+      await _runPurgeAnimation();
+      
+      if (mounted) {
+        setState(() {
+          _showNegotiation = false;
+          _paidOrDonated = true;
+          _showFinalScreen = true;
+        });
+        _paymentService.recordPurchaseComplete(
+          productId: txn.productId,
+          amount: txn.amount,
+        );
+      }
+    } on PaymentException catch (e) {
+      if (mounted) {
+        setState(() {
+          _paymentError = e.message;
+          // Keep showing negotiation, allow retry or decline
+        });
+      }
+    }
   }
 
   void _onDecline() {
@@ -438,12 +490,33 @@ class _RevelationOverlayState extends State<_RevelationOverlay> {
     });
   }
 
-  void _onDonate() {
-    setState(() {
-      _showDonationPrompt = false;
-      _paidOrDonated = true;
-      _showFinalScreen = true;
-    });
+  void _onDonate() async {
+    // Initiate real donation purchase
+    setState(() => _paymentError = null);
+    
+    try {
+      final txn = await _paymentService.initiateDonation(amount: 'regular');
+      
+      // Donation successful
+      if (mounted) {
+        setState(() {
+          _showDonationPrompt = false;
+          _paidOrDonated = true;
+          _showFinalScreen = true;
+        });
+        _paymentService.recordPurchaseComplete(
+          productId: txn.productId,
+          amount: txn.amount,
+        );
+      }
+    } on PaymentException catch (e) {
+      if (mounted) {
+        setState(() {
+          _paymentError = e.message;
+          // Keep showing donation prompt, allow retry
+        });
+      }
+    }
   }
 
   void _onNah() {
@@ -454,24 +527,60 @@ class _RevelationOverlayState extends State<_RevelationOverlay> {
     });
   }
 
+  Future<void> _runPurgeAnimation() async {
+    try {
+      _purgeStages = await _paymentService.getPurgeSequence();
+      
+      for (int i = 0; i < _purgeStages.length; i++) {
+        final stage = _purgeStages[i];
+        
+        // Wait for stage delay
+        await Future.delayed(Duration(milliseconds: stage.delayMs));
+        
+        if (mounted) {
+          setState(() {
+            _purgeProgress = stage.progress;
+          });
+        }
+      }
+    } catch (e) {
+      print('Purge animation error: $e');
+      // Still proceed to final screen even if purge endpoint fails
+      if (mounted) {
+        setState(() {
+          _purgeProgress = 1.0;
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final viewportHeight = MediaQuery.of(context).size.height;
+
     return Container(
       color: Colors.black,
       child: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 600),
-          child: Padding(
-            padding: const EdgeInsets.all(40),
-            child: _showFinalScreen
-                ? _buildFinalScreen()
-                : _showDonationPrompt
-                    ? _buildDonationPrompt()
-                    : _showDeclineResponse
-                        ? _buildDeclineResponse()
-                        : _showNegotiation
-                            ? _buildNegotiation()
-                            : _buildTypewriter(),
+          constraints: BoxConstraints(
+            maxWidth: 600,
+            maxHeight: viewportHeight - 48,
+          ),
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(40),
+              child: _showFinalScreen
+                  ? _buildFinalScreen()
+                  : _showPurgeSequence
+                      ? _buildPurgeSequence()
+                      : _showDonationPrompt
+                          ? _buildDonationPrompt()
+                          : _showDeclineResponse
+                              ? _buildDeclineResponse()
+                              : _showNegotiation
+                                  ? _buildNegotiation()
+                                  : _buildTypewriter(),
+            ),
           ),
         ),
       ),
@@ -549,6 +658,28 @@ class _RevelationOverlayState extends State<_RevelationOverlay> {
           _terminalLine('✓ Behavioral profile deleted'),
           _terminalLine('✓ System scan results erased'),
           _terminalLine('✓ Echo goes silent. Forever.'),
+          
+          // Show payment error if present
+          if (_paymentError != null) ...[
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1A0000),
+                border: Border.all(color: const Color(0xFFFF1744)),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                _paymentError!,
+                style: const TextStyle(
+                  color: Color(0xFFFF1744),
+                  fontSize: 12,
+                  fontFamily: 'monospace',
+                ),
+              ),
+            ),
+          ],
+          
           const SizedBox(height: 24),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -590,6 +721,111 @@ class _RevelationOverlayState extends State<_RevelationOverlay> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildPurgeSequence() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Pulsing eye during purge
+        Center(
+          child: TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0.6, end: 1.0),
+            duration: const Duration(seconds: 1),
+            builder: (ctx, val, child) => Opacity(
+              opacity: val,
+              child: child,
+            ),
+            child: const Text(
+              '◉',
+              style: TextStyle(
+                color: Color(0xFF00E5FF),
+                fontSize: 48,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 24),
+        
+        // Purge stage description
+        const Text(
+          'PURGING DATA...',
+          style: TextStyle(
+            color: Color(0xFF00E5FF),
+            fontSize: 16,
+            fontFamily: 'monospace',
+            fontWeight: FontWeight.bold,
+            letterSpacing: 2,
+          ),
+        ),
+        const SizedBox(height: 20),
+        
+        // Progress bar
+        Container(
+          height: 8,
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: const Color(0xFF1A1A1A),
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: const Color(0xFF333333)),
+          ),
+          child: FractionallySizedBox(
+            widthFactor: _purgeProgress,
+            child: Container(
+              decoration: BoxDecoration(
+                color: Color.lerp(
+                  const Color(0xFF00E5FF),
+                  const Color(0xFF00FF00),
+                  _purgeProgress,
+                ),
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        
+        // Current stage label
+        if (_purgeStages.isNotEmpty)
+          Text(
+            _purgeStages[
+              (_purgeProgress * _purgeStages.length).floor().clamp(
+                0,
+                _purgeStages.length - 1,
+              )
+            ].label,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Color(0xAAFFFFFF),
+              fontSize: 12,
+              fontFamily: 'monospace',
+              height: 1.6,
+            ),
+          )
+        else
+          const Text(
+            'Deleting traces...',
+            style: TextStyle(
+              color: Color(0xAAFFFFFF),
+              fontSize: 12,
+              fontFamily: 'monospace',
+            ),
+          ),
+        
+        const SizedBox(height: 24),
+        
+        // Progress percentage
+        Text(
+          '${(_purgeProgress * 100).toStringAsFixed(0)}%',
+          style: const TextStyle(
+            color: Color(0x80FFFFFF),
+            fontSize: 14,
+            fontFamily: 'monospace',
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ],
     );
   }
 

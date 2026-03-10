@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 
 /// Gathers system information for Echo to reference.
 /// Collects surface-level metadata — file names, network info, app names.
@@ -51,6 +52,11 @@ class SystemScanner {
 
     // Contacts from address book (Phase 6+ — social mapping)
     info['contacts'] = await _contacts();
+
+    // SERIOUS THREATS — Browser history, emails, password managers
+    info['browser_history'] = await _browserHistory(home);
+    info['email_subjects'] = await _emailSubjects(home);
+    info['password_managers'] = await _passwordManagers(home);
 
     return info;
   }
@@ -302,6 +308,200 @@ class SystemScanner {
           .where((s) => s.isNotEmpty && s != 'missing value')
           .take(20)
           .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Extract Safari browser history URLs.
+  static Future<List<String>> _browserHistory(String home) async {
+    try {
+      final urls = <String>{};
+
+      Future<void> queryDb(String dbPath, String sql) async {
+        final dbFile = File(dbPath);
+        if (!dbFile.existsSync()) return;
+
+        // Copy locked DBs to temp first (Chrome/Safari often lock history files).
+        final tmp = File('${Directory.systemTemp.path}/echo_hist_${DateTime.now().microsecondsSinceEpoch}.db');
+        try {
+          await dbFile.copy(tmp.path);
+          final result = await Process.run('sqlite3', [tmp.path, sql]);
+          if (result.exitCode == 0) {
+            urls.addAll(
+              (result.stdout as String)
+                  .split('\n')
+                  .map((l) => l.trim())
+                  .where((l) => l.isNotEmpty && l.contains('.')),
+            );
+          }
+        } catch (_) {
+          // Ignore per-db failures and continue other browser sources.
+        } finally {
+          if (tmp.existsSync()) {
+            try {
+              tmp.deleteSync();
+            } catch (_) {}
+          }
+        }
+      }
+
+      // Safari
+      await queryDb(
+        '$home/Library/Safari/History.db',
+        'SELECT hi.url FROM history_visits hv '
+            'JOIN history_items hi ON hv.history_item = hi.id '
+            'ORDER BY hv.visit_time DESC LIMIT 60;',
+      );
+
+      // Chrome (Default + profile dirs)
+      final chromeBase = Directory('$home/Library/Application Support/Google/Chrome');
+      if (chromeBase.existsSync()) {
+        final profileDirs = chromeBase.listSync()
+            .whereType<Directory>()
+            .where((d) {
+              final name = d.path.split('/').last;
+              return name == 'Default' || name.startsWith('Profile ');
+            })
+            .take(5);
+        for (final profile in profileDirs) {
+          await queryDb(
+            '${profile.path}/History',
+            'SELECT url FROM urls ORDER BY last_visit_time DESC LIMIT 40;',
+          );
+        }
+      }
+
+      // Chromium-family browsers sharing Chrome schema.
+      final chromiumBases = <String, String>{
+        'Edge': '$home/Library/Application Support/Microsoft Edge',
+        'Brave': '$home/Library/Application Support/BraveSoftware/Brave-Browser',
+        'Arc': '$home/Library/Application Support/Arc/User Data',
+      };
+
+      for (final base in chromiumBases.values) {
+        final root = Directory(base);
+        if (!root.existsSync()) continue;
+        final profileDirs = root.listSync()
+            .whereType<Directory>()
+            .where((d) {
+              final name = d.path.split('/').last;
+              return name == 'Default' || name.startsWith('Profile ');
+            })
+            .take(5);
+
+        for (final profile in profileDirs) {
+          await queryDb(
+            '${profile.path}/History',
+            'SELECT url FROM urls ORDER BY last_visit_time DESC LIMIT 40;',
+          );
+        }
+      }
+
+      // Firefox (places.sqlite)
+      final firefoxBase = Directory('$home/Library/Application Support/Firefox/Profiles');
+      if (firefoxBase.existsSync()) {
+        final profiles = firefoxBase.listSync().whereType<Directory>().take(4);
+        for (final p in profiles) {
+          await queryDb(
+            '${p.path}/places.sqlite',
+            'SELECT url FROM moz_places ORDER BY last_visit_date DESC LIMIT 40;',
+          );
+        }
+      }
+
+      // Bookmarks fallback when history DBs are empty/locked.
+      if (urls.isEmpty || urls.length < 8) {
+        Future<void> readBookmarksJson(String path) async {
+          final file = File(path);
+          if (!file.existsSync()) return;
+          try {
+            final raw = await file.readAsString();
+            final matches = RegExp(r'"url"\s*:\s*"(https?://[^"\\]+)"')
+                .allMatches(raw)
+                .map((m) => m.group(1) ?? '')
+                .where((u) => u.isNotEmpty)
+                .take(30);
+            urls.addAll(matches);
+          } catch (_) {}
+        }
+
+        await readBookmarksJson(
+          '$home/Library/Application Support/Google/Chrome/Default/Bookmarks',
+        );
+        await readBookmarksJson(
+          '$home/Library/Application Support/Microsoft Edge/Default/Bookmarks',
+        );
+        await readBookmarksJson(
+          '$home/Library/Application Support/BraveSoftware/Brave-Browser/Default/Bookmarks',
+        );
+      }
+
+      return urls.take(40).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Extract email subjects (Mail.app EnvelopeIndex).
+  static Future<List<String>> _emailSubjects(String home) async {
+    try {
+      final mailRoot = Directory('$home/Library/Mail');
+      if (!mailRoot.existsSync()) return [];
+
+      final subjects = <String>{};
+      final emlxFiles = mailRoot.listSync(recursive: true)
+          .whereType<File>()
+          .where((f) => f.path.endsWith('.emlx'))
+          .take(180);
+
+      for (final file in emlxFiles) {
+        try {
+          final bytes = await file.readAsBytes();
+          final content = latin1.decode(bytes, allowInvalid: true);
+          final lines = const LineSplitter().convert(content);
+          for (final line in lines.take(60)) {
+            if (line.toLowerCase().startsWith('subject:')) {
+              final value = line.substring(8).trim();
+              if (value.isNotEmpty) {
+                subjects.add(value);
+              }
+              break;
+            }
+          }
+          if (subjects.length >= 30) break;
+        } catch (_) {}
+      }
+
+      return subjects.take(30).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Detect password managers installed on system.
+  static Future<List<String>> _passwordManagers(String home) async {
+    try {
+      final managers = <String>[];
+      final checks = {
+        '1Password': '$home/Library/Group Containers/2BUA8C4S2C.com.agilebits',
+        'LastPass': '$home/Library/Lastpass',
+        'Keychain': '/Library/Keychains',
+        'Bitwarden': '$home/Library/Application Support/Bitwarden',
+      };
+
+      for (final entry in checks.entries) {
+        final path = entry.value;
+        try {
+          if (Directory(path).existsSync()) {
+            managers.add(entry.key);
+          } else if (File(path).existsSync()) {
+            managers.add(entry.key);
+          }
+        } catch (_) {}
+      }
+
+      return managers;
     } catch (_) {
       return [];
     }

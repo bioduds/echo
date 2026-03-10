@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'dart:ui';
 import 'package:flame/collisions.dart';
 import 'package:flame/components.dart';
@@ -34,15 +35,34 @@ class Projectile extends CircleComponent
 
   @override
   void render(Canvas canvas) {
-    final glowColor = isPlayerOwned ? const Color(0x4000E5FF) : const Color(0x40FF1744);
-    canvas.drawCircle(
-      Offset.zero,
-      projectileRadius * 2.5,
+    final angle = atan2(direction.y, direction.x);
+    final glowColor = isPlayerOwned ? const Color(0x5000E5FF) : const Color(0x50FF1744);
+    final coreColor = isPlayerOwned ? const Color(0xFF00E5FF) : const Color(0xFFFF1744);
+
+    canvas.save();
+    canvas.rotate(angle);
+
+    // Bloom glow
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(center: Offset.zero, width: 22, height: 7.2),
+        const Radius.circular(3.6),
+      ),
       Paint()
         ..color = glowColor
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
     );
-    super.render(canvas);
+
+    // Core capsule
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(center: Offset.zero, width: 11, height: 3.6),
+        const Radius.circular(1.8),
+      ),
+      Paint()..color = coreColor,
+    );
+
+    canvas.restore();
   }
 
   @override

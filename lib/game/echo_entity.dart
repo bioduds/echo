@@ -41,6 +41,9 @@ class EchoEntity extends CircleComponent
 
   EchoEntity() : super(radius: _kRadius, anchor: Anchor.center);
 
+  // Glow pulse animation
+  double _glowPulse = 0;
+
   @override
   Future<void> onLoad() async {
     await super.onLoad();
@@ -51,15 +54,150 @@ class EchoEntity extends CircleComponent
   }
 
   @override
+  void update(double dt) {
+    super.update(dt);
+    // Glow pulse — evil pulsing effect
+    _glowPulse += dt * 2.5; // Fast pulse
+    _attackTimer = (_attackTimer - dt).clamp(0, double.infinity);
+    _dodgeCooldown = (_dodgeCooldown - dt).clamp(0, double.infinity);
+    _strafeAngle += dt * 3.5;
+
+    // Dodge incoming projectiles
+    _tryDodge(dt);
+
+    position += currentVelocity * dt;
+    // Clamp to right half of arena (Echo's side)
+    position.x = position.x.clamp(game.halfCourt + _kRadius, game.size.x - _kRadius);
+    position.y = position.y.clamp(_kRadius, game.size.y - _kRadius);
+    currentVelocity *= 0.92;
+  }
+
+  @override
   void render(Canvas canvas) {
+    final phase = game.round.clamp(1, 12);
+    final pulse = 0.5 + 0.5 * sin(_glowPulse);
+
+    // ── Outer nebula glow ────────────────────────────────────────────
     canvas.drawCircle(
-      Offset.zero,
-      _kRadius * 2.2,
+      Offset.zero, _kRadius * 4.0,
       Paint()
-        ..color = const Color(0x18FF1744)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 14),
+        ..color = Color.fromARGB((30 + (pulse * 20).round()), 255, 23, 68)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 42),
     );
-    super.render(canvas);
+    canvas.drawCircle(
+      Offset.zero, _kRadius * 2.8,
+      Paint()
+        ..color = Color.fromARGB((60 + (pulse * 40).round()), 255, 23, 68)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20),
+    );
+
+    // ── Spike tendrils ───────────────────────────────────────────────
+    final tendrilCount = 4 + (dodgeSkill * 9).round();
+    final tendrilLength = _kRadius * (1.4 + phase * 0.22);
+    final tendrilPaint = Paint()
+      ..color = Color.fromARGB((80 + (pulse * 60).round()), 255, 23, 68)
+      ..strokeWidth = 1.2
+      ..strokeCap = StrokeCap.round;
+    for (int i = 0; i < tendrilCount; i++) {
+      final angle = (_glowPulse * 0.4) + (i * 2 * pi / tendrilCount);
+      canvas.drawLine(
+        Offset.zero,
+        Offset(cos(angle) * tendrilLength, sin(angle) * tendrilLength),
+        tendrilPaint,
+      );
+    }
+
+    // ── Sclera (white of eye) ────────────────────────────────────────
+    canvas.drawCircle(
+      Offset.zero, _kRadius,
+      Paint()..color = const Color(0xFFF2E8E2),
+    );
+
+    // ── Blood vessels (phase 3+) ─────────────────────────────────────
+    if (phase >= 3) {
+      final vesselAlpha = ((phase - 2) / 10 * 140).round().clamp(0, 140);
+      final vesselPaint = Paint()
+        ..color = Color.fromARGB(vesselAlpha, 200, 0, 0)
+        ..strokeWidth = 0.8
+        ..strokeCap = StrokeCap.round;
+      final vesselRng = Random(42); // deterministic shape
+      for (int i = 0; i < 8; i++) {
+        final startAngle = vesselRng.nextDouble() * 2 * pi;
+        final jitter = vesselRng.nextDouble() * 0.8 - 0.4;
+        final startR = _kRadius * 0.5;
+        final endR = _kRadius * (0.85 + vesselRng.nextDouble() * 0.12);
+        canvas.drawLine(
+          Offset(cos(startAngle) * startR, sin(startAngle) * startR),
+          Offset(cos(startAngle + jitter) * endR, sin(startAngle + jitter) * endR),
+          vesselPaint,
+        );
+      }
+    }
+
+    // ── Iris ──────────────────────────────────────────────────────────
+    final irisT = ((phase - 1) / 11).clamp(0.0, 1.0);
+    final irisColor = Color.lerp(
+      const Color(0xFFD4860A), // amber early
+      const Color(0xFF660000), // blood red late
+      irisT,
+    )!;
+    final irisRadius = _kRadius * 0.68;
+    canvas.drawCircle(Offset.zero, irisRadius, Paint()..color = irisColor);
+
+    // Iris radial lines
+    final irisLinePaint = Paint()
+      ..color = const Color(0x50000000)
+      ..strokeWidth = 0.6;
+    for (int i = 0; i < 16; i++) {
+      final a = i * pi / 8;
+      canvas.drawLine(
+        Offset(cos(a) * irisRadius * 0.35, sin(a) * irisRadius * 0.35),
+        Offset(cos(a) * irisRadius, sin(a) * irisRadius),
+        irisLinePaint,
+      );
+    }
+
+    // Iris rings
+    for (final rFrac in [0.45, 0.72, 0.95]) {
+      canvas.drawCircle(
+        Offset.zero, irisRadius * rFrac,
+        Paint()
+          ..color = const Color(0x30000000)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 0.5,
+      );
+    }
+
+    // ── Tracking pupil ────────────────────────────────────────────────
+    final rawDir = game.player.position - position;
+    final maxOff = irisRadius * 0.28;
+    final Offset pupilOffset;
+    if (rawDir.length <= maxOff) {
+      pupilOffset = Offset(rawDir.x, rawDir.y);
+    } else {
+      final norm = rawDir.normalized();
+      pupilOffset = Offset(norm.x * maxOff, norm.y * maxOff);
+    }
+    final pupilRadius = irisRadius * (0.45 + 0.10 * (phase / 12));
+    canvas.drawCircle(
+      pupilOffset, pupilRadius,
+      Paint()..color = const Color(0xFF0A0005),
+    );
+
+    // Pupil gleam
+    canvas.drawCircle(
+      pupilOffset + Offset(-pupilRadius * 0.3, -pupilRadius * 0.35),
+      pupilRadius * 0.18,
+      Paint()..color = const Color(0xCCFFFFFF),
+    );
+
+    // Inner surface glow
+    canvas.drawCircle(
+      Offset.zero, _kRadius,
+      Paint()
+        ..color = Color.fromARGB((18 + (pulse * 12).round()), 255, 23, 68)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.inner, 4),
+    );
   }
 
   void executeAction(Map<String, dynamic> action) {
@@ -136,23 +274,6 @@ class EchoEntity extends CircleComponent
       final perp = Vector2(-dir.y, dir.x);
       currentVelocity = perp * speed * (0.3 + dodgeSkill * 0.5) * (_rng.nextBool() ? 1 : -1);
     }
-  }
-
-  @override
-  void update(double dt) {
-    super.update(dt);
-    _attackTimer = (_attackTimer - dt).clamp(0, double.infinity);
-    _dodgeCooldown = (_dodgeCooldown - dt).clamp(0, double.infinity);
-    _strafeAngle += dt * 3.5;
-
-    // Dodge incoming projectiles
-    _tryDodge(dt);
-
-    position += currentVelocity * dt;
-    // Clamp to right half of arena (Echo's side)
-    position.x = position.x.clamp(game.halfCourt + _kRadius, game.size.x - _kRadius);
-    position.y = position.y.clamp(_kRadius, game.size.y - _kRadius);
-    currentVelocity *= 0.92;
   }
 
   void _tryDodge(double dt) {

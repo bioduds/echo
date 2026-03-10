@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'dart:ui';
 import 'package:flame/collisions.dart';
 import 'package:flame/components.dart';
@@ -26,6 +27,11 @@ class Player extends CircleComponent
   double _sampleTimer = 0;
   Vector2? _lastRecordedDir;
 
+  // Visual effects
+  List<Vector2> _trail = [];
+  double _trailTimer = 0;
+  double _ringAngle = 0;
+
   final Set<LogicalKeyboardKey> _keysPressed = {};
 
   Player() : super(radius: _kRadius, anchor: Anchor.center);
@@ -39,15 +45,65 @@ class Player extends CircleComponent
 
   @override
   void render(Canvas canvas) {
-    // Glow
+    // Motion trail
+    for (int i = 0; i < _trail.length; i++) {
+      final t = 1.0 - (i + 1) / (_trail.length + 1);
+      final localPos = Offset(
+        _trail[i].x - position.x,
+        _trail[i].y - position.y,
+      );
+      canvas.drawCircle(
+        localPos,
+        (_kRadius * (0.8 - i * 0.06)).clamp(2.0, _kRadius),
+        Paint()..color = Color.fromARGB((t * 80).round(), 0, 229, 255),
+      );
+    }
+
+    // Outer glow
     canvas.drawCircle(
-      Offset.zero,
-      _kRadius * 2.2,
+      Offset.zero, _kRadius * 2.5,
       Paint()
-        ..color = const Color(0x1800E5FF)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 14),
+        ..color = const Color(0x2200E5FF)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 18),
     );
-    super.render(canvas);
+
+    // Rotating tech ring arcs (3 evenly spaced)
+    final arcPaint = Paint()
+      ..color = const Color(0xFF00E5FF)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.4
+      ..strokeCap = StrokeCap.round;
+    final outerR = _kRadius + 6.0;
+    const sweepAngle = pi * 0.55;
+    for (int i = 0; i < 3; i++) {
+      final startAngle = _ringAngle + (i * 2 * pi / 3);
+      canvas.drawArc(
+        Rect.fromCircle(center: Offset.zero, radius: outerR),
+        startAngle, sweepAngle, false,
+        arcPaint,
+      );
+    }
+
+    // Inner static ring
+    canvas.drawCircle(
+      Offset.zero, _kRadius - 4,
+      Paint()
+        ..color = const Color(0x4000E5FF)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.0,
+    );
+
+    // Core
+    canvas.drawCircle(
+      Offset.zero, _kRadius,
+      Paint()..color = const Color(0xFF00E5FF),
+    );
+
+    // Center dot
+    canvas.drawCircle(
+      Offset.zero, 3.5,
+      Paint()..color = const Color(0xFFFFFFFF),
+    );
   }
 
   @override
@@ -93,6 +149,15 @@ class Player extends CircleComponent
     // Clamp to left half of arena (player's side)
     position.x = position.x.clamp(_kRadius, game.halfCourt - _kRadius);
     position.y = position.y.clamp(_kRadius, game.size.y - _kRadius);
+
+    // Motion trail & ring rotation
+    _ringAngle += dt * 1.5;
+    _trailTimer += dt;
+    if (_trailTimer >= 0.04) {
+      _trailTimer = 0;
+      _trail.insert(0, position.clone());
+      if (_trail.length > 10) _trail.removeLast();
+    }
 
     // Record actions (throttled)
     _sampleTimer += dt;

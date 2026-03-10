@@ -6,5 +6,8 @@
 	<true/>
 	<key>com.apple.security.network.client</key>
 	<true/>
+	<!-- Required for Mac App Store In-App Purchases -->
+	<key>com.apple.developer.in-app-payments</key>
+	<array/>
 </dict>
 </plist>
