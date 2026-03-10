@@ -48,7 +48,7 @@ class _DisclaimerScreenState extends State<DisclaimerScreen> {
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 600),
-          child: Padding(
+          child: SingleChildScrollView(
             padding: const EdgeInsets.all(40),
             child: Column(
               mainAxisSize: MainAxisSize.min,

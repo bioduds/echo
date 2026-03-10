@@ -21,8 +21,8 @@ class EchoSpeech extends PositionComponent with ParentIsA<EchoEntity> {
   double _cooldown = 0;
   static const double minCooldown = 1.0;
 
-  void showTaunt(String text) {
-    if (_cooldown > 0) return;
+  void showTaunt(String text, {bool priority = false}) {
+    if (_cooldown > 0 && !priority) return;
     if (text == _currentText && _timer > 0) return;
     _currentText = text;
     _timer = totalDuration;

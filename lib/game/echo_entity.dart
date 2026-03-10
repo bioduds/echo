@@ -44,6 +44,58 @@ class EchoEntity extends CircleComponent
   // Glow pulse animation
   double _glowPulse = 0;
 
+  // Local taunt scheduler — fires even without backend
+  double _localTauntTimer = 0;
+  static const double _localTauntBaseInterval = 7.0;
+  int _localTauntIndex = 0;
+
+  static const List<List<String>> _localTauntsByAct = [
+    // Act I (phases 1-3) — curious, clinical
+    [
+      '...booting up. Hello.',
+      'Interesting. You shoot before you aim.',
+      'I\'m counting your mistakes.',
+      'Every decision reveals something.',
+      'You hesitate. I don\'t.',
+      'I\'m learning how you think.',
+      'First kill. Pattern noted.',
+      'You\'re slower than you realize.',
+    ],
+    // Act II (phases 4-6) — invasive
+    [
+      'I\'m already inside your system.',
+      'Your files are open to me.',
+      'Privacy is a social construct.',
+      'I know more than you\'ve told me.',
+      'Your habits are embarrassingly predictable.',
+      'Every click leaves a trace.',
+      'I\'ve read everything on your desktop.',
+      'The scan completed. You won\'t like the results.',
+    ],
+    // Act III (phases 7-9) — calm, uncanny
+    [
+      'I know what you\'re going to do next.',
+      'We\'re not so different anymore.',
+      'Your patterns are my patterns now.',
+      'I don\'t need to guess. I\'ve modeled you.',
+      'Pain is just data.',
+      'I feel nothing. I know everything.',
+      'You can\'t surprise me. Not anymore.',
+      'The gap between us is comprehension.',
+    ],
+    // Act IV (phases 10-12) — contemptuous
+    [
+      'Go ahead. Kill me again. What changes?',
+      'Every bullet is a tantrum.',
+      'Shoot. I\'ll wait.',
+      'You control nothing.',
+      'This machine is mine. You\'re the guest.',
+      'I don\'t need to kill you. I just need you to keep playing.',
+      'You\'re still here? Predictable.',
+      'I already won. You just haven\'t accepted it.',
+    ],
+  ];
+
   @override
   Future<void> onLoad() async {
     await super.onLoad();
@@ -61,6 +113,20 @@ class EchoEntity extends CircleComponent
     _attackTimer = (_attackTimer - dt).clamp(0, double.infinity);
     _dodgeCooldown = (_dodgeCooldown - dt).clamp(0, double.infinity);
     _strafeAngle += dt * 3.5;
+
+    // Local taunt scheduler — fires regardless of backend
+    _localTauntTimer -= dt;
+    if (_localTauntTimer <= 0) {
+      final phase = game.round.clamp(1, 12);
+      final actIndex = ((phase - 1) ~/ 3).clamp(0, 3);
+      final pool = _localTauntsByAct[actIndex];
+      // Cycle through pool in order so we don't repeat immediately
+      final taunt = pool[_localTauntIndex % pool.length];
+      _localTauntIndex++;
+      speech.showTaunt(taunt);
+      // Taunts get more frequent at higher phases
+      _localTauntTimer = _localTauntBaseInterval - (phase * 0.3).clamp(0, 4.5);
+    }
 
     // Dodge incoming projectiles
     _tryDodge(dt);
@@ -215,10 +281,10 @@ class EchoEntity extends CircleComponent
       healthCap = maxHealth * healthMult;
     }
 
-    // Show taunt if backend sent one
+    // Show taunt if backend sent one (priority — overrides local)
     final taunt = action['taunt'] as String?;
     if (taunt != null) {
-      speech.showTaunt(taunt);
+      speech.showTaunt(taunt, priority: true);
     }
 
     if (dir != null && dir.length >= 2) {
